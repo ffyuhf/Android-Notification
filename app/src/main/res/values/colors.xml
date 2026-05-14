@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Design 3 颜色定义（浅色主题基准色） -->
+<resources>
+    <!-- Primary -->
+    <color name="md_theme_primary">#FF1B6B4A</color>
+    <color name="md_theme_onPrimary">#FFFFFFFF</color>
+    <color name="md_theme_primaryContainer">#FFA4F5C8</color>
+    <color name="md_theme_onPrimaryContainer">#FF002112</color>
+
+    <!-- Secondary -->
+    <color name="md_theme_secondary">#FF4E6355</color>
+    <color name="md_theme_onSecondary">#FFFFFFFF</color>
+    <color name="md_theme_secondaryContainer">#FFD0E8D6</color>
+    <color name="md_theme_onSecondaryContainer">#FF0B1F15</color>
+
+    <!-- Tertiary -->
+    <color name="md_theme_tertiary">#FF3B6470</color>
+    <color name="md_theme_onTertiary">#FFFFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#FFBFE9F7</color>
+    <color name="md_theme_onTertiaryContainer">#FF001F27</color>
+
+    <!-- Error -->
+    <color name="md_theme_error">#FFBA1A1A</color>
+    <color name="md_theme_onError">#FFFFFFFF</color>
+    <color name="md_theme_errorContainer">#FFFFDAD6</color>
+    <color name="md_theme_onErrorContainer">#FF410002</color>
+
+    <!-- Background & Surface -->
+    <color name="md_theme_background">#FFFBFDF8</color>
+    <color name="md_theme_onBackground">#FF191C1A</color>
+    <color name="md_theme_surface">#FFFBFDF8</color>
+    <color name="md_theme_onSurface">#FF191C1A</color>
+
+    <!-- Surface Variant -->
+    <color name="md_theme_surfaceVariant">#FFDDE5DB</color>
+    <color name="md_theme_onSurfaceVariant">#FF414942</color>
+
+    <!-- Outline -->
+    <color name="md_theme_outline">#FF717971</color>
+    <color name="md_theme_outlineVariant">#FFC1C9BF</color>
+
+    <!-- Inverse -->
+    <color name="md_theme_inverseSurface">#FF2E312D</color>
+    <color name="md_theme_inverseOnSurface">#FFEFF2EB</color>
+    <color name="md_theme_inversePrimary">#FF88D8AD</color>
+</resources>

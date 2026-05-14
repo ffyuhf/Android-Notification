@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 英语字符串资源（默认） -->
+<!-- 创建日期：2026-05-14 | 作者：Cline -->
+<resources>
+    <!-- ===== 应用信息 ===== -->
+    <string name="app_name">Notify</string>
+
+    <!-- ===== 底部导航 ===== -->
+    <string name="tab_home">Home</string>
+    <string name="tab_history">History</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- ===== 首页 ===== -->
+    <string name="home_title">Create Notification</string>
+    <string name="hint_notification_title">Title (optional)</string>
+    <string name="hint_notification_content">Notification content</string>
+    <string name="btn_send_now">Send Now</string>
+    <string name="btn_schedule">Schedule</string>
+    <string name="select_date_time">Select Date &amp; Time</string>
+    <string name="label_repeat">Repeat</string>
+    <string name="confirm">Confirm</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- ===== 重复类型 ===== -->
+    <string name="repeat_none">No Repeat</string>
+    <string name="repeat_hourly">Hourly</string>
+    <string name="repeat_daily">Daily</string>
+    <string name="repeat_weekly">Weekly</string>
+    <string name="repeat_monthly">Monthly</string>
+    <string name="repeat_yearly">Yearly</string>
+
+    <!-- ===== 通知操作 ===== -->
+    <string name="action_copy">Copy</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_unpin">Unpin</string>
+
+    <!-- ===== 历史记录 ===== -->
+    <string name="history_title">History</string>
+    <string name="history_empty">No notification history yet</string>
+    <string name="btn_resend">Resend</string>
+    <string name="btn_delete">Delete</string>
+    <string name="btn_delete_all">Delete All</string>
+    <string name="confirm_delete">Are you sure you want to delete all notifications?</string>
+
+    <!-- ===== 设置 ===== -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_notification_actions">Notification Actions</string>
+    <string name="settings_show_copy_button">Show Copy Button</string>
+    <string name="settings_show_edit_button">Show Edit Button</string>
+    <string name="settings_show_unpin_button">Show Unpin Button</string>
+    <string name="settings_multiline_display">Multiline Display</string>
+    <string name="settings_anti_delete">Anti-Delete Protection</string>
+    <string name="settings_anti_delete_desc">Automatically restore deleted pinned notifications</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_dark_mode">Dark Mode</string>
+    <string name="settings_language">Language</string>
+
+    <!-- ===== 深色模式选项 ===== -->
+    <string name="dark_mode_system">Follow System</string>
+    <string name="dark_mode_light">Light</string>
+    <string name="dark_mode_dark">Dark</string>
+
+    <!-- ===== 语言选项 ===== -->
+    <string name="language_system">Follow System</string>
+    <string name="language_chinese">Chinese</string>
+    <string name="language_english">English</string>
+
+    <!-- ===== 通知渠道 ===== -->
+    <string name="notification_channel_pinned">Pinned Notifications</string>
+    <string name="notification_channel_pinned_desc">Persistent pinned notifications</string>
+    <string name="notification_service_channel">Background Service</string>
+    <string name="notification_service_channel_desc">Keeping your notifications visible</string>
+
+    <!-- ===== 权限提示 ===== -->
+    <string name="permission_notification_denied">Notification permission denied. Please enable it in Settings.</string>
+
+    <!-- ===== Toast 提示 ===== -->
+    <string name="toast_copied">Copied to clipboard</string>
+    <string name="toast_notification_sent">Notification sent</string>
+    <string name="toast_notification_scheduled">Notification scheduled</string>
+    <string name="toast_notification_updated">Notification updated</string>
+</resources>
