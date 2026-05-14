@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,9 +36,6 @@ import androidx.lifecycle.ViewModelProvider
 import com.android.notify.ui.theme.NotifyAppTheme
 import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /**
  * 编辑通知 Activity
@@ -87,16 +85,12 @@ private fun EditNotificationContent(
     // 加载通知数据
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
-    var loaded by remember { mutableStateOf(false) }
 
-    // 首次加载时读取通知数据
-    if (!loaded && notificationId != -1) {
-        loaded = true
-        CoroutineScope(Dispatchers.IO).launch {
-            val entity = viewModel.let { vm ->
-                val repo = com.android.notify.data.repository.NotificationRepository.getInstance(context)
-                repo.getById(notificationId)
-            }
+    // 首次加载时读取通知数据（使用 LaunchedEffect 避免在组合期间创建协程）
+    LaunchedEffect(notificationId) {
+        if (notificationId != -1) {
+            val repo = com.android.notify.data.repository.NotificationRepository.getInstance(context)
+            val entity = repo.getById(notificationId)
             entity?.let {
                 title = it.title ?: ""
                 content = it.content
