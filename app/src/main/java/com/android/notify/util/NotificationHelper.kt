@@ -14,6 +14,7 @@ import com.android.notify.data.datastore.SettingsDataStore
 import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.receiver.NotificationActionReceiver
 import com.android.notify.receiver.NotificationDismissReceiver
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -65,11 +66,11 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // 读取设置（如未传入则使用默认值）
-        val showCopy = settings?.let { runBlocking { it.showCopyButton } } ?: true
-        val showEdit = settings?.let { runBlocking { it.showEditButton } } ?: true
-        val showUnpin = settings?.let { runBlocking { it.showUnpinButton } } ?: true
-        val multiline = settings?.let { runBlocking { it.multilineDisplay } } ?: true
-        val antiDelete = settings?.let { runBlocking { it.antiDeleteProtection } } ?: true
+        val showCopy = settings?.let { runBlocking { it.showCopyButton.first() } } ?: true
+        val showEdit = settings?.let { runBlocking { it.showEditButton.first() } } ?: true
+        val showUnpin = settings?.let { runBlocking { it.showUnpinButton.first() } } ?: true
+        val multiline = settings?.let { runBlocking { it.multilineDisplay.first() } } ?: true
+        val antiDelete = settings?.let { runBlocking { it.antiDeleteProtection.first() } } ?: true
 
         val builder = NotificationCompat.Builder(context, NotifyApp.CHANNEL_PINNED)
             .setSmallIcon(R.drawable.ic_notification)

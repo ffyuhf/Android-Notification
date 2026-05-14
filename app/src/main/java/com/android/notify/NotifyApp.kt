@@ -50,10 +50,10 @@ class NotifyApp : Application() {
         // 固定通知渠道 - 高重要性，用户可见
         val pinnedChannel = NotificationChannel(
             CHANNEL_PINNED,
-            getString(R.string.notification_channel_name),
+            getString(R.string.notification_channel_pinned),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = getString(R.string.notification_channel_desc)
+            description = getString(R.string.notification_channel_pinned_desc)
             setShowBadge(true)
             enableVibration(true)
         }
@@ -61,7 +61,7 @@ class NotifyApp : Application() {
         // 前台服务渠道 - 低重要性，不打扰用户
         val serviceChannel = NotificationChannel(
             CHANNEL_SERVICE,
-            getString(R.string.notification_service_channel_name),
+            getString(R.string.notification_service_channel),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = getString(R.string.notification_service_channel_desc)
