@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -22,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -54,7 +58,6 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            // 权限获取后启动前台服务
             NotifyForegroundService.start(this)
         } else {
             Toast.makeText(this, R.string.permission_notification_denied, Toast.LENGTH_LONG).show()
@@ -71,13 +74,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 初始化 ViewModel
         viewModel = ViewModelProvider(this)[NotifyViewModel::class.java]
-
-        // 检查并请求权限
         checkAndRequestPermissions()
 
-        // 设置 Compose 内容
         setContent {
             val darkMode by viewModel.darkMode.collectAsState()
             NotifyAppTheme(darkMode = darkMode) {
@@ -88,12 +87,9 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 检查并请求必要权限
-     *
-     * 必需权限：通知权限
-     * 可选权限：精确闹钟权限（Android 12+）
      */
     private fun checkAndRequestPermissions() {
-        // 1. 通知权限（Android 13+ 必需）
+        // 通知权限（Android 13+ 必需）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this, Manifest.permission.POST_NOTIFICATIONS
@@ -101,19 +97,16 @@ class MainActivity : ComponentActivity() {
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                // 已有权限，启动服务
                 NotifyForegroundService.start(this)
             }
         } else {
-            // Android 13以下直接启动服务
             NotifyForegroundService.start(this)
         }
 
-        // 2. 精确闹钟权限（Android 12+ 可选）
+        // 精确闹钟权限（Android 12+ 可选）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(android.app.AlarmManager::class.java)
             if (!alarmManager.canScheduleExactAlarms()) {
-                // 引导用户到设置页面开启精确闹钟权限
                 val intent = Intent(
                     android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
                 ).apply {
@@ -128,11 +121,14 @@ class MainActivity : ComponentActivity() {
 /**
  * 主内容 Composable
  *
- * 底部导航 + 页面切换
+ * 底部导航 + 页面切换。
+ * 修复：使用标准 remember + mutableIntStateOf，移除自定义 remember 遮蔽。
+ * 修复：页面渲染使用正确的 Compose 组合方式，避免 .let 导致的闪退。
  */
 @Composable
 private fun MainContent(viewModel: NotifyViewModel) {
-    var selectedItem = remember { androidx.compose.runtime.mutableStateOf(0) }
+    // 使用 mutableIntStateOf 避免不必要的重组
+    var selectedItem by remember { mutableIntStateOf(0) }
 
     val items = listOf(
         NavigationItem(stringResource(R.string.tab_home), Icons.Default.Home),
@@ -147,25 +143,20 @@ private fun MainContent(viewModel: NotifyViewModel) {
                     NavigationBarItem(
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
-                        selected = selectedItem.value == index,
-                        onClick = { selectedItem.value = index }
+                        selected = selectedItem == index,
+                        onClick = { selectedItem = index }
                     )
                 }
             }
         }
     ) { paddingValues ->
-        when (selectedItem.value) {
-            0 -> HomeScreen(viewModel).let {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.padding(paddingValues)
-                ) { it }
+        // 正确的 Compose 页面渲染，避免 .let 导致的组合问题
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (selectedItem) {
+                0 -> HomeScreen(viewModel)
+                1 -> HistoryScreen(viewModel)
+                2 -> SettingsScreen(viewModel)
             }
-            1 -> androidx.compose.foundation.layout.Box(
-                modifier = Modifier.padding(paddingValues)
-            ) { HistoryScreen(viewModel) }
-            2 -> androidx.compose.foundation.layout.Box(
-                modifier = Modifier.padding(paddingValues)
-            ) { SettingsScreen(viewModel) }
         }
     }
 }
@@ -177,11 +168,3 @@ private data class NavigationItem(
     val label: String,
     val icon: ImageVector
 )
-
-/**
- * remember 辅助函数
- */
-@Composable
-private fun remember(initial: () -> androidx.compose.runtime.MutableState<Int>): androidx.compose.runtime.MutableState<Int> {
-    return androidx.compose.runtime.remember { initial() }
-}

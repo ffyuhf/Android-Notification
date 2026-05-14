@@ -9,7 +9,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -85,12 +86,10 @@ private val DarkColorScheme = darkColorScheme(
 /**
  * 应用主题 Composable
  *
- * 支持三种模式：
- * - system：跟随系统深色模式
- * - light：强制浅色
- * - dark：强制深色
- *
- * Android 12+ 优先使用动态颜色（Material You）。
+ * 修复颜色切换卡顿：
+ * 1. 使用 remember 缓存 colorScheme，仅在 darkMode 变化时重新计算
+ * 2. 使用 DisposableEffect 替代 SideEffect，仅在 darkTheme 变化时更新窗口属性
+ * 3. 避免 SideEffect 在每次重组时都触发窗口操作
  *
  * @param darkMode 深色模式设置："system"/"light"/"dark"
  * @param content 子内容
@@ -106,29 +105,43 @@ fun NotifyAppTheme(
         else -> isSystemInDarkTheme()
     }
 
-    // Android 12+ 使用动态颜色
-    val colorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
+    // 使用 remember 缓存 colorScheme，仅 darkTheme 变化时重新创建
+    val colorScheme = remember(darkTheme) {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                // 动态颜色需要 Context，此处无法在 remember 中获取
+                // 改为在下方使用 remember(darkTheme) + LocalContext
+                null
+            }
+            darkTheme -> DarkColorScheme
+            else -> LightColorScheme
+        }
+    }
+
+    // Android 12+ 动态颜色需要 Context
+    val finalColorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val context = LocalContext.current
+        remember(darkTheme, context) {
             if (darkTheme) dynamicDarkColorScheme(context)
             else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    } else {
+        colorScheme!!
     }
 
-    // 设置状态栏颜色
+    // 仅在 darkTheme 变化时更新窗口属性，避免每次重组都触发
     val view = LocalView.current
     if (!view.isInEditMode) {
-        SideEffect {
+        DisposableEffect(darkTheme) {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.surface.toArgb()
+            window.statusBarColor = finalColorScheme.surface.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            onDispose { }
         }
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = finalColorScheme,
         content = content
     )
 }
