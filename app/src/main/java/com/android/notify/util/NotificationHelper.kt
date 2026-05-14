@@ -128,9 +128,10 @@ object NotificationHelper {
             )
         }
 
-        // 编辑按钮
+        // 编辑按钮（添加唯一 action 确保 PendingIntent 不被系统合并）
         if (showEdit) {
             val editIntent = Intent(context, EditNotificationActivity::class.java).apply {
+                action = "EDIT_${entity.id}"
                 putExtra(EXTRA_NOTIFICATION_ID, entity.id)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -167,18 +168,7 @@ object NotificationHelper {
             )
         }
 
-        // 点击通知打开应用
-        val contentIntent = Intent(context, EditNotificationActivity::class.java).apply {
-            putExtra(EXTRA_NOTIFICATION_ID, entity.id)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
-            context,
-            entity.notificationId * 10,
-            contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        builder.setContentIntent(contentPendingIntent)
+        // 不设置 contentIntent：点击通知体无任何响应，仅按钮可操作
 
         notificationManager.notify(entity.notificationId, builder.build())
     }
