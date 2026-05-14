@@ -1,11 +1,9 @@
 package com.android.notify.util
 
-import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.android.notify.EditNotificationActivity
 import com.android.notify.NotifyApp
@@ -15,13 +13,14 @@ import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.receiver.NotificationActionReceiver
 import com.android.notify.receiver.NotificationDismissReceiver
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 /**
  * 通知工具类
  *
  * 封装通知的创建、更新、删除、恢复操作。
  * 所有通知栏交互均通过此工具类统一管理。
+ *
+ * 修复：sendNotification 改为 suspend 函数，移除 runBlocking 避免主线程阻塞导致闪退。
  *
  * 创建日期：2026-05-14
  * 作者：Cline
@@ -49,28 +48,30 @@ object NotificationHelper {
     const val EXTRA_NOTIFICATION_CONTENT = "notification_content"
 
     /**
-     * 发送通知到通知栏
+     * 发送通知到通知栏（挂起函数）
      *
      * 根据通知实体和当前设置构建并显示通知。
      * 包含三层防删除保护：setOngoing + deleteIntent + 巡检恢复。
+     *
+     * 修复：改为 suspend 函数，移除 runBlocking，避免主线程阻塞导致闪退。
      *
      * @param context 上下文
      * @param entity 通知实体
      * @param settings DataStore设置（读取按钮开关）
      */
-    fun sendNotification(
+    suspend fun sendNotification(
         context: Context,
         entity: NotificationEntity,
         settings: SettingsDataStore? = null
     ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // 读取设置（如未传入则使用默认值）
-        val showCopy = settings?.let { runBlocking { it.showCopyButton.first() } } ?: true
-        val showEdit = settings?.let { runBlocking { it.showEditButton.first() } } ?: true
-        val showUnpin = settings?.let { runBlocking { it.showUnpinButton.first() } } ?: true
-        val multiline = settings?.let { runBlocking { it.multilineDisplay.first() } } ?: true
-        val antiDelete = settings?.let { runBlocking { it.antiDeleteProtection.first() } } ?: true
+        // 读取设置（挂起读取，不再阻塞主线程）
+        val showCopy = settings?.showCopyButton?.first() ?: true
+        val showEdit = settings?.showEditButton?.first() ?: true
+        val showUnpin = settings?.showUnpinButton?.first() ?: true
+        val multiline = settings?.multilineDisplay?.first() ?: true
+        val antiDelete = settings?.antiDeleteProtection?.first() ?: true
 
         val builder = NotificationCompat.Builder(context, NotifyApp.CHANNEL_PINNED)
             .setSmallIcon(R.drawable.ic_notification)

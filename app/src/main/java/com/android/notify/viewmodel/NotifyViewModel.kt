@@ -103,11 +103,12 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 isAntiDeleteEnabled = true
             )
 
-            // 保存到数据库
-            repository.insertNotification(entity)
+            // 保存到数据库并获取真实ID，确保Intent中携带正确的数据库ID
+            val rowId = repository.insertNotification(entity)
+            val savedEntity = entity.copy(id = rowId.toInt())
 
-            // 发送到通知栏
-            NotificationHelper.sendNotification(context, entity, settings)
+            // 发送到通知栏（使用包含真实ID的entity）
+            NotificationHelper.sendNotification(context, savedEntity, settings)
 
             // 启动前台保活服务
             NotifyForegroundService.start(context)
@@ -179,8 +180,11 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 isPinned = true
             )
 
-            repository.insertNotification(newEntity)
-            NotificationHelper.sendNotification(context, newEntity, settings)
+            // 保存到数据库并获取真实ID，确保Intent中携带正确的数据库ID
+            val rowId = repository.insertNotification(newEntity)
+            val savedEntity = newEntity.copy(id = rowId.toInt())
+
+            NotificationHelper.sendNotification(context, savedEntity, settings)
 
             _message.value = "toast_notification_sent"
         }
