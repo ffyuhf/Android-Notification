@@ -10,6 +10,8 @@ import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +51,10 @@ import com.android.notify.viewmodel.NotifyViewModel
  * - U1 精确闹钟权限手动入口（Android 12+ 且未授权时显示）
  * - U2 通知权限状态展示与系统设置跳转（架构文档承诺但原未实现）
  *
+ * 修正（2026-08-16 11:57 | F1）：主内容 Column 添加 verticalScroll。
+ * 背景：新增"重发响铃"开关（B10）后内容总高超出屏幕可视区，
+ * 外观设置区（深色模式/语言）被挤出屏幕外且页面不可滚动导致无法点击。
+ *
  * 创建日期：2026-05-14 | 作者：Cline
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,6 +92,8 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
             modifier = Modifier
                 .padding(paddingValues)
                 .padding(16.dp)
+                // F1 修复（2026-08-16）：新增滚动，避免外观设置区被挤出屏幕外无法点击
+                .verticalScroll(rememberScrollState())
         ) {
             // ===== 通知操作设置 =====
             SettingsSectionTitle(text = stringResource(R.string.settings_notification_actions))
