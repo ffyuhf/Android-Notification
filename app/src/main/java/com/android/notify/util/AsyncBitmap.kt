@@ -30,6 +30,8 @@ object AsyncBitmap {
      * 实现思路：produceState 以 (path, maxDimension) 为 key，组合期间 value 为 null
      * （调用方按 null 不渲染处理，占位高度由外层布局保持，避免加载闪烁跳动）；
      * 后台 IO 线程完成下采样解码后回填状态触发重组。path 变化时旧加载自动取消重启。
+     * 整改（2026-08-16 16:41 | CI lint）：producer 体改单行 value 赋值（解码逻辑抽至
+     * loadSampledImageBitmap），消除 ProduceStateDoesNotAssignValue Error。
      *
      * @param path 图片绝对路径；null/空串时状态恒为 null
      * @param maxDimension 解码目标边长上限（px），由调用方按展示场景指定
@@ -38,13 +40,21 @@ object AsyncBitmap {
     @Composable
     fun rememberSampledBitmap(path: String?, maxDimension: Int): State<ImageBitmap?> {
         return produceState<ImageBitmap?>(initialValue = null, path, maxDimension) {
-            if (path.isNullOrBlank()) {
-                value = null
-                return@produceState
-            }
-            value = withContext(Dispatchers.IO) {
-                ImageStorageHelper.decodeSampledBitmap(path, maxDimension)
-            }?.asImageBitmap()
+            value = loadSampledImageBitmap(path, maxDimension)
         }
+    }
+
+    /**
+     * IO 线程下采样解码并转换为 ImageBitmap（produceState producer 内调用）
+     *
+     * @param path 图片绝对路径；null/空串返回 null
+     * @param maxDimension 解码目标边长上限（px）
+     * @return 解码成功为 ImageBitmap；无路径/解码失败返回 null
+     */
+    private suspend fun loadSampledImageBitmap(path: String?, maxDimension: Int): ImageBitmap? {
+        if (path.isNullOrBlank()) return null
+        return withContext(Dispatchers.IO) {
+            ImageStorageHelper.decodeSampledBitmap(path, maxDimension)
+        }?.asImageBitmap()
     }
 }
