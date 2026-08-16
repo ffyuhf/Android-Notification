@@ -55,6 +55,14 @@ interface NotificationDao {
     suspend fun deleteById(id: Int)
 
     /**
+     * 批量删除通知记录（H2 新增，多选删除使用）
+     *
+     * @param ids 数据库主键ID集合
+     */
+    @Query("DELETE FROM notifications WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
+
+    /**
      * 删除所有通知记录
      */
     @Query("DELETE FROM notifications")

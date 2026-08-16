@@ -74,6 +74,9 @@ class SettingsDataStore(private val context: Context) {
     /** 历史重发响铃提醒开关（B10 新增） */
     private val keyResendSoundEnabled = booleanPreferencesKey("resend_sound_enabled")
 
+    /** 历史记录布局模式（H1 新增）："single"单列 / "two_column"两列 */
+    private val keyHistoryLayoutMode = stringPreferencesKey("history_layout_mode")
+
     /** 深色模式：system/light/dark */
     private val keyDarkMode = stringPreferencesKey("dark_mode")
 
@@ -99,6 +102,9 @@ class SettingsDataStore(private val context: Context) {
 
     /** 历史重发是否响铃提醒，默认true */
     val resendSoundEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[keyResendSoundEnabled] ?: true }
+
+    /** 历史记录布局模式，默认"single"（H1 新增） */
+    val historyLayoutMode: Flow<String> = context.settingsDataStore.data.map { it[keyHistoryLayoutMode] ?: "single" }
 
     /** 深色模式设置，默认跟随系统 */
     val darkMode: Flow<String> = context.settingsDataStore.data.map { it[keyDarkMode] ?: "system" }
@@ -174,6 +180,14 @@ class SettingsDataStore(private val context: Context) {
      */
     suspend fun setResendSoundEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[keyResendSoundEnabled] = value }
+    }
+
+    /**
+     * 设置历史记录布局模式（H1 新增）
+     * @param value "single"单列, "two_column"两列
+     */
+    suspend fun setHistoryLayoutMode(value: String) {
+        context.settingsDataStore.edit { it[keyHistoryLayoutMode] = value }
     }
 
     /**

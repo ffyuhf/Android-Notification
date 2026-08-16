@@ -55,6 +55,15 @@ class NotificationRepository private constructor(context: Context) {
     }
 
     /**
+     * 批量删除通知记录（H2 新增，多选删除使用）
+     *
+     * @param ids 数据库主键ID集合
+     */
+    suspend fun deleteByIds(ids: List<Int>) {
+        dao.deleteByIds(ids)
+    }
+
+    /**
      * 删除所有通知记录
      */
     suspend fun deleteAll() {

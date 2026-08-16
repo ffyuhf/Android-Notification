@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -42,6 +44,35 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /** 所有通知记录（按时间降序），响应式 Flow */
     val allNotifications: StateFlow<List<NotificationEntity>> = repository.allNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ===== 历史记录搜索（H3 新增 2026-08-16） =====
+
+    /** 历史记录搜索关键词 */
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    /**
+     * 按关键词过滤后的历史记录（H3 新增）
+     *
+     * 匹配标题与内容，忽略大小写；关键词为空时返回全量。
+     */
+    val filteredNotifications: StateFlow<List<NotificationEntity>> =
+        combine(allNotifications, searchQuery) { list, query ->
+            if (query.isBlank()) {
+                list
+            } else {
+                val keyword = query.trim()
+                list.filter { entity ->
+                    entity.title?.contains(keyword, ignoreCase = true) == true ||
+                        entity.content.contains(keyword, ignoreCase = true)
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 更新历史记录搜索关键词（H3） */
+    fun setSearchQuery(value: String) {
+        _searchQuery.value = value
+    }
 
     // ===== 设置状态 =====
 
@@ -76,6 +107,10 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /** 历史重发时是否响铃提醒 */
     val resendSoundEnabled: StateFlow<Boolean> = settings.resendSoundEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /** 历史记录布局模式（H1 新增）：single单列 / two_column两列 */
+    val historyLayoutMode: StateFlow<String> = settings.historyLayoutMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "single")
 
     // ===== UI 状态 =====
 
@@ -188,57 +223,113 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun resendNotification(entity: NotificationEntity) {
         viewModelScope.launch {
-            // 取消可能残留的定时闹钟（须在更换 notificationId 前用旧值取消）
-            AlarmScheduler.cancel(context, entity.id, entity.notificationId)
-            // 清除通知栏可能残留的旧 ID 通知
-            NotificationHelper.cancelNotification(context, entity.notificationId)
-
-            // 生成新通知栏ID：新 ID 首次发布可响铃提醒，不受 setOnlyAlertOnce 静默影响
-            val notificationId = NotificationHelper.generateNotificationId(context)
-
-            // 更新原记录：createdAt 置顶；清空定时字段转为即时通知
-            val updatedEntity = entity.copy(
-                createdAt = System.currentTimeMillis(),
-                scheduledAt = null,
-                repeatType = null,
-                isActive = true,
-                isPinned = true,
-                notificationId = notificationId
-            )
-            repository.updateNotification(updatedEntity)
-
-            // 重发是否响铃由用户设置决定（默认开启，可关闭静默弹出）
-            val snapshot = settings.getSnapshot()
-            NotificationHelper.sendNotification(
-                context,
-                updatedEntity,
-                snapshot,
-                soundEnabled = snapshot.resendSoundEnabled
-            )
-
-            // 与"立即发送"行为对齐：启动前台保活服务（D4）
-            NotifyForegroundService.start(context)
-
-            _message.value = R.string.toast_notification_sent
+            resendNotificationInternal(entity)
         }
+    }
+
+    /**
+     * 批量重新发送历史通知（H2 新增，多选发送使用）
+     *
+     * 逐条按现有 resend 链路执行：取消旧闹钟/旧通知 → 新通知栏ID → 更新原记录置顶 → 发送。
+     *
+     * @param entities 待重发的通知实体列表（按传入顺序逐条处理）
+     */
+    fun resendNotifications(entities: List<NotificationEntity>) {
+        viewModelScope.launch {
+            entities.forEach { resendNotificationInternal(it) }
+        }
+    }
+
+    /**
+     * 单条重发核心链路（H2 抽取，单条与批量共用）
+     *
+     * @param entity 历史通知实体
+     */
+    private suspend fun resendNotificationInternal(entity: NotificationEntity) {
+        // 取消可能残留的定时闹钟与通知栏旧 ID 通知（B11 清理逻辑复用）
+        cancelNotificationSideEffects(entity)
+
+        // 生成新通知栏ID：新 ID 首次发布可响铃提醒，不受 setOnlyAlertOnce 静默影响
+        val notificationId = NotificationHelper.generateNotificationId(context)
+
+        // 更新原记录：createdAt 置顶；清空定时字段转为即时通知
+        val updatedEntity = entity.copy(
+            createdAt = System.currentTimeMillis(),
+            scheduledAt = null,
+            repeatType = null,
+            isActive = true,
+            isPinned = true,
+            notificationId = notificationId
+        )
+        repository.updateNotification(updatedEntity)
+
+        // 重发是否响铃由用户设置决定（默认开启，可关闭静默弹出）
+        val snapshot = settings.getSnapshot()
+        NotificationHelper.sendNotification(
+            context,
+            updatedEntity,
+            snapshot,
+            soundEnabled = snapshot.resendSoundEnabled
+        )
+
+        // 与"立即发送"行为对齐：启动前台保活服务（D4）
+        NotifyForegroundService.start(context)
+
+        _message.value = R.string.toast_notification_sent
+    }
+
+    /**
+     * 删除前清理该记录的通知栏通知与残留定时闹钟（B11 新增）
+     *
+     * 修复（2026-08-16 12:51 | B11）：原删除仅删库，通知栏残留、闹钟仍触发。
+     * 两清理方法均幂等，对已不存在/未设置的 ID 无副作用。
+     *
+     * @param entity 待删除的通知实体
+     */
+    private suspend fun cancelNotificationSideEffects(entity: NotificationEntity) {
+        AlarmScheduler.cancel(context, entity.id, entity.notificationId)
+        NotificationHelper.cancelNotification(context, entity.notificationId)
     }
 
     /**
      * 删除历史通知记录
      *
+     * 优化（2026-08-16 12:51 | B11）：删除前先清理该记录的通知栏通知与残留闹钟，
+     * 避免删库后通知栏残留、定时闹钟仍触发。
+     *
      * @param id 数据库ID
      */
     fun deleteNotification(id: Int) {
         viewModelScope.launch {
+            val entity = repository.getById(id) ?: return@launch
+            cancelNotificationSideEffects(entity)
             repository.deleteById(id)
         }
     }
 
     /**
+     * 批量删除历史通知记录（H2 新增，多选删除使用）
+     *
+     * 删除前逐条清理通知栏通知与残留闹钟（B11 链路）。
+     *
+     * @param ids 数据库主键ID集合
+     */
+    fun deleteNotifications(ids: List<Int>) {
+        viewModelScope.launch {
+            val entities = repository.allNotifications.first().filter { it.id in ids }
+            entities.forEach { cancelNotificationSideEffects(it) }
+            repository.deleteByIds(ids)
+        }
+    }
+
+    /**
      * 清空所有历史记录
+     *
+     * 优化（2026-08-16 12:51 | B11）：清空前逐条清理通知栏通知与残留闹钟。
      */
     fun deleteAllNotifications() {
         viewModelScope.launch {
+            repository.allNotifications.first().forEach { cancelNotificationSideEffects(it) }
             repository.deleteAll()
         }
     }
@@ -312,6 +403,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
 
     /** 设置历史重发是否响铃提醒 */
     fun setResendSoundEnabled(value: Boolean) { viewModelScope.launch { settings.setResendSoundEnabled(value) } }
+
+    /** 设置历史记录布局模式（H1）："single"单列, "two_column"两列 */
+    fun setHistoryLayoutMode(value: String) { viewModelScope.launch { settings.setHistoryLayoutMode(value) } }
 
     /**
      * 清除消息状态

@@ -42,6 +42,22 @@
     <string name="btn_delete_all">Delete All</string>
     <string name="confirm_delete">Are you sure you want to delete all notifications?</string>
 
+    <!-- ===== 历史记录增强（2026-08-16 | H1/H2/H3） ===== -->
+    <string name="history_search">Search</string>
+    <string name="history_search_hint">Search title or content</string>
+    <string name="history_search_clear">Clear search</string>
+    <string name="history_no_match">No matching records</string>
+    <string name="history_layout_single">Switch to single column</string>
+    <string name="history_layout_two_column">Switch to two columns</string>
+    <string name="history_exit_multi_select">Exit multi-select</string>
+    <string name="history_selected_count">%1$d selected</string>
+    <string name="history_select_all">Select All</string>
+    <string name="history_invert_selection">Invert Selection</string>
+    <string name="history_send_selected">Send Selected</string>
+    <string name="history_delete_selected">Delete Selected</string>
+    <string name="confirm_delete_single">Delete this record?</string>
+    <string name="confirm_delete_selected">Delete %1$d selected records?</string>
+
     <!-- ===== 设置 ===== -->
     <string name="settings_title">Settings</string>
     <string name="settings_notification_actions">Notification Actions</string>

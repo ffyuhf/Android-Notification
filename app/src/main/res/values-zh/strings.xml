@@ -42,6 +42,22 @@
     <string name="btn_delete_all">清空全部</string>
     <string name="confirm_delete">确定要删除所有通知记录吗？</string>
 
+    <!-- ===== 历史记录增强（2026-08-16 | H1/H2/H3） ===== -->
+    <string name="history_search">搜索</string>
+    <string name="history_search_hint">搜索标题或内容</string>
+    <string name="history_search_clear">清除搜索</string>
+    <string name="history_no_match">无匹配记录</string>
+    <string name="history_layout_single">切换为单列显示</string>
+    <string name="history_layout_two_column">切换为两列显示</string>
+    <string name="history_exit_multi_select">退出多选</string>
+    <string name="history_selected_count">已选 %1$d 条</string>
+    <string name="history_select_all">全选</string>
+    <string name="history_invert_selection">反选</string>
+    <string name="history_send_selected">发送选中</string>
+    <string name="history_delete_selected">删除选中</string>
+    <string name="confirm_delete_single">确定要删除该条记录吗？</string>
+    <string name="confirm_delete_selected">确定要删除选中的 %1$d 条记录吗？</string>
+
     <!-- ===== 设置 ===== -->
     <string name="settings_title">设置</string>
     <string name="settings_notification_actions">通知操作</string>
