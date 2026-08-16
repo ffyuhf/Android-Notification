@@ -82,8 +82,11 @@
     <string name="language_english">English</string>
 
     <!-- ===== 通知渠道 ===== -->
+    <!-- 静默渠道文案（2026-08-16 | 重发响铃修复）：重发响铃开关关闭时的发布渠道 -->
     <string name="notification_channel_pinned">固定通知</string>
     <string name="notification_channel_pinned_desc">持续显示的固定通知</string>
+    <string name="notification_channel_pinned_silent">固定通知（静默）</string>
+    <string name="notification_channel_pinned_silent_desc">重发不响铃的静默固定通知</string>
     <string name="notification_service_channel">后台服务</string>
     <string name="notification_service_channel_desc">保持通知始终可见</string>
 

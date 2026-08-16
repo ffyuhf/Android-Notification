@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -60,6 +63,9 @@ import kotlinx.coroutines.withContext
  * 优化（2026-08-16）：
  * - B4 改继承 AppCompatActivity，支持 per-app 语言切换
  * - U5 通知数据改经 ViewModel 加载（原直访 Repository 违反 MVVM 分层）
+ * 修正（2026-08-16 19:15 | 编辑页图片布局修复）：
+ * - 内容 Column 加 verticalScroll，输入框 weight 改 heightIn(min=120dp)，
+ *   修复有图时自适应图片（最高320dp）将输入框压缩至高度0无法输入的问题
  *
  * 创建日期：2026-05-14
  * 作者：Cline
@@ -155,6 +161,10 @@ private fun EditNotificationContent(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
+                // 修正（2026-08-16 19:15 | 编辑页图片布局修复）：加滚动，
+                // 有图时自适应图片（最高320dp）会压缩 weight 输入框至高度0无法输入；
+                // 滚动后图片/输入框/按钮在超屏时均可滚动到达
+                .verticalScroll(rememberScrollState())
         ) {
             // 标题输入
             OutlinedTextField(
@@ -168,13 +178,15 @@ private fun EditNotificationContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             // 内容输入
+            // 修正（2026-08-16 19:15 | 编辑页图片布局修复）：滚动容器内 weight 无意义，
+            // 且被上方自适应图片（最高320dp）压缩至高度0；改 heightIn 保证最小输入区
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
                 label = { Text(stringResource(R.string.hint_notification_content)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .heightIn(min = 120.dp),
                 maxLines = 10
             )
 

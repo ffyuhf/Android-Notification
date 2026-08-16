@@ -107,13 +107,21 @@ object NotificationHelper {
             context.getString(R.string.image_only_notification)
         }
 
-        val builder = NotificationCompat.Builder(context, NotifyApp.CHANNEL_PINNED)
+        // 渠道按 soundEnabled 选择（修正 2026-08-16 | 重发响铃修复）：
+        // Android 8.0+（minSdk=26）通知声音/震动由渠道决定，setDefaults 无效；
+        // true → 响铃渠道（IMPORTANCE_HIGH），false → 静默渠道（IMPORTANCE_LOW，
+        // 无声音/震动/横幅，通知静默出现在通知栏）
+        val channelId = if (soundEnabled) {
+            NotifyApp.CHANNEL_PINNED
+        } else {
+            NotifyApp.CHANNEL_PINNED_SILENT
+        }
+
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(entity.title ?: context.getString(R.string.app_name))
             .setContentText(displayContent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // 重发场景按用户设置决定是否响铃提醒（B10/D3）；其余发送默认响铃
-            .setDefaults(if (soundEnabled) NotificationCompat.DEFAULT_ALL else 0)
             // 更新已存在的通知时不再响铃震动，仅首次发送提醒（P5）
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)

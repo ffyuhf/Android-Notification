@@ -23,8 +23,13 @@ import com.android.notify.util.AppLogger
 class NotifyApp : Application() {
 
     companion object {
-        /** 固定通知渠道ID */
+        /** 固定通知渠道ID（响铃渠道） */
         const val CHANNEL_PINNED = "channel_pinned"
+
+        /** 固定通知静默渠道ID（新增 2026-08-16 | 重发响铃修复）：
+         * 重发响铃开关关闭时使用；Android 8.0+ 提醒行为由渠道决定，
+         * setDefaults 无效，静默需按渠道切换实现 */
+        const val CHANNEL_PINNED_SILENT = "channel_pinned_silent"
 
         /** 前台服务通知渠道ID */
         const val CHANNEL_SERVICE = "channel_service"
@@ -76,7 +81,7 @@ class NotifyApp : Application() {
 
         val notificationManager = getSystemService(NotificationManager::class.java)
 
-        // 固定通知渠道 - 高重要性，用户可见
+        // 固定通知渠道 - 高重要性，用户可见（响铃）
         val pinnedChannel = NotificationChannel(
             CHANNEL_PINNED,
             getString(R.string.notification_channel_pinned),
@@ -85,6 +90,21 @@ class NotifyApp : Application() {
             description = getString(R.string.notification_channel_pinned_desc)
             setShowBadge(true)
             enableVibration(true)
+        }
+
+        // 固定通知静默渠道 - 低重要性（新增 2026-08-16 | 重发响铃修复）：
+        // 重发响铃开关关闭时按此渠道发布，无声音、无震动、无角标、无横幅；
+        // createNotificationChannels 幂等，老用户升级后自动创建
+        val silentPinnedChannel = NotificationChannel(
+            CHANNEL_PINNED_SILENT,
+            getString(R.string.notification_channel_pinned_silent),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = getString(R.string.notification_channel_pinned_silent_desc)
+            setShowBadge(false)
+            // 显式关闭声音与震动（IMPORTANCE_LOW 默认无声，此处双保险）
+            setSound(null, null)
+            enableVibration(false)
         }
 
         // 前台服务渠道 - 低重要性，不打扰用户
@@ -98,6 +118,8 @@ class NotifyApp : Application() {
             enableVibration(false)
         }
 
-        notificationManager.createNotificationChannels(listOf(pinnedChannel, serviceChannel))
+        notificationManager.createNotificationChannels(
+            listOf(pinnedChannel, silentPinnedChannel, serviceChannel)
+        )
     }
 }
