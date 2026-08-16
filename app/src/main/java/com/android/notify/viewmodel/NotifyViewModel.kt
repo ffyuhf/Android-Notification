@@ -2,6 +2,7 @@ package com.android.notify.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.notify.R
@@ -35,6 +36,9 @@ import kotlinx.coroutines.withContext
  * 修改（2026-08-16 15:39 | 图片通知闪退修复与日志导出）：
  * - 关键链路（发送/定时/重发/删除）接入 AppLogger 埋点
  * - 新增 exportLog：设置页分级别导出日志（SAF CreateDocument 零权限）
+ * 修改（2026-08-16 18:02 | RemoteInput 可变性修复）：
+ * - 发送/重发按 sendNotification 返回结果分支提示：发布失败 Toast 告知用户
+ * - 编辑更新失败时应用级 Toast 兜底（编辑页为独立 Activity 不消费 message 通道）
  */
 class NotifyViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -170,14 +174,19 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             val rowId = repository.insertNotification(entity)
             val savedEntity = entity.copy(id = rowId.toInt())
 
-            // 发送到通知栏（使用包含真实ID的entity，复用单次设置快照）
-            NotificationHelper.sendNotification(context, savedEntity, settings.getSnapshot())
+            // 发送到通知栏（使用包含真实ID的entity，复用单次设置快照）；
+            // 发布失败不崩溃（sendNotification 已容错），按结果向用户提示
+            val posted = NotificationHelper.sendNotification(
+                context, savedEntity, settings.getSnapshot()
+            )
 
             // 启动前台保活服务
             NotifyForegroundService.start(context)
 
-            AppLogger.i(TAG, "立即发送 barId=$notificationId 有图=${imagePath != null}")
-            _message.value = R.string.toast_notification_sent
+            AppLogger.i(TAG, "立即发送 barId=$notificationId 有图=${imagePath != null} posted=$posted")
+            _message.value =
+                if (posted) R.string.toast_notification_sent
+                else R.string.toast_notification_post_failed
         }
     }
 
@@ -292,9 +301,10 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
         )
         repository.updateNotification(updatedEntity)
 
-        // 重发是否响铃由用户设置决定（默认开启，可关闭静默弹出）
+        // 重发是否响铃由用户设置决定（默认开启，可关闭静默弹出）；
+        // 发布失败不崩溃（sendNotification 已容错），按结果向用户提示
         val snapshot = settings.getSnapshot()
-        NotificationHelper.sendNotification(
+        val posted = NotificationHelper.sendNotification(
             context,
             updatedEntity,
             snapshot,
@@ -304,7 +314,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
         // 与"立即发送"行为对齐：启动前台保活服务（D4）
         NotifyForegroundService.start(context)
 
-        _message.value = R.string.toast_notification_sent
+        _message.value =
+            if (posted) R.string.toast_notification_sent
+            else R.string.toast_notification_post_failed
     }
 
     /**
@@ -413,8 +425,18 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             )
             repository.updateNotification(updatedEntity)
 
-            // 重新发送更新后的通知
-            NotificationHelper.sendNotification(context, updatedEntity, settings.getSnapshot())
+            // 重新发送更新后的通知；编辑页为独立 Activity 不消费 message 通道，
+            // 失败时用应用级 Toast 直接告知，成功提示仍由编辑页自身 Toast 负责
+            val posted = NotificationHelper.sendNotification(
+                context, updatedEntity, settings.getSnapshot()
+            )
+            if (!posted) {
+                Toast.makeText(
+                    context,
+                    R.string.toast_notification_post_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 

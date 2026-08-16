@@ -126,6 +126,8 @@
     <string name="toast_notification_sent">通知已发送</string>
     <string name="toast_notification_scheduled">通知已定时</string>
     <string name="toast_notification_updated">通知已更新</string>
+    <!-- 新增（2026-08-16 18:02 | RemoteInput 可变性修复）：通知发布失败提示（M2） -->
+    <string name="toast_notification_post_failed">通知发布失败</string>
     <string name="toast_log_exported">日志已导出</string>
     <string name="toast_log_export_failed">日志导出失败</string>
 </resources>

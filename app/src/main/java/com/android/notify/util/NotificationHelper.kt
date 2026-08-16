@@ -29,6 +29,11 @@ import kotlinx.coroutines.withContext
  * - P2 设置快照：批量发送复用单次 DataStore 读取结果
  * - P5 setOnlyAlertOnce：通知更新时不再重复响铃震动
  * - P6 通知栏ID唯一性校验：消除ID碰撞导致的通知互相覆盖
+ * 修正（2026-08-16 18:02 | RemoteInput 可变性 + 发布容错）：
+ * - 编辑 Action PendingIntent 改 FLAG_MUTABLE：Android 12+（API 31+）强制要求携带
+ *   RemoteInput 的 Action 其 PendingIntent 必须可变，IMMUTABLE 会被系统拒绝发布
+ *   （恢复失败与主线程崩溃循环的根因）
+ * - notify() 包 runCatching 并返回 Boolean：发布失败记 ERROR 日志，不再击穿调用协程
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -84,6 +89,7 @@ object NotificationHelper {
      * @param entity 通知实体
      * @param settingsSnapshot 设置快照（可选，批量场景复用）
      * @param soundEnabled 是否响铃提醒（默认true；B10 重发场景按用户设置决定）
+     * @return true 发布成功；false 发布失败（已记 ERROR 日志，用户主动路径需向用户提示）
      */
     suspend fun sendNotification(
         context: Context,
@@ -191,11 +197,15 @@ object NotificationHelper {
                 putExtra(EXTRA_NOTIFICATION_ID, entity.id)
                 putExtra(EXTRA_NOTIFICATION_BAR_ID, entity.notificationId)
             }
+            // 修正（2026-08-16 18:02 | RemoteInput 可变性）：FLAG_IMMUTABLE → FLAG_MUTABLE。
+            // Android 12+ 强制要求携带 RemoteInput 的 Action 其 PendingIntent 必须可变
+            // （系统触发时需向 Intent 回填用户输入），IMMUTABLE 会被系统以
+            // "PendingIntents attached to actions with remote inputs must be mutable" 拒绝发布。
             val editPendingIntent = PendingIntent.getBroadcast(
                 context,
                 entity.notificationId * 10 + 2,
                 editIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
             val editAction = NotificationCompat.Action.Builder(
                 R.drawable.ic_edit,
@@ -229,8 +239,19 @@ object NotificationHelper {
 
         // 不设置 contentIntent：点击通知体无任何响应，仅按钮可操作
 
-        notificationManager.notify(entity.notificationId, builder.build())
-        AppLogger.d(TAG, "通知已发送 barId=${entity.notificationId} 有图=${imageBitmap != null}")
+        // 修正（2026-08-16 18:02 | 发布容错）：notify 包 runCatching 并向上返回发布结果。
+        // 非法通知配置（如 IMMUTABLE RemoteInput Action）会抛 IllegalArgumentException
+        // 击穿主线程协程导致应用崩溃循环；现失败记 ERROR 日志不外抛，
+        // 由调用方按返回值决定是否向用户提示（后台路径静默，用户主动路径 Toast）。
+        val postResult = runCatching {
+            notificationManager.notify(entity.notificationId, builder.build())
+        }
+        postResult.onSuccess {
+            AppLogger.d(TAG, "通知已发送 barId=${entity.notificationId} 有图=${imageBitmap != null}")
+        }.onFailure { throwable ->
+            AppLogger.e(TAG, "通知发布失败 barId=${entity.notificationId}", throwable)
+        }
+        return postResult.isSuccess
     }
 
     /**
