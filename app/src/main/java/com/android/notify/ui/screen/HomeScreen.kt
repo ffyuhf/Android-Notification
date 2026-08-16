@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -62,6 +63,7 @@ import java.util.Locale
  * - U1 精确闹钟权限惰性引导：定时确认时检查权限，无权限才提示并跳转设置页
  * - U3 输入状态 rememberSaveable：切换Tab后输入内容保留
  * - U4 定时时间未来校验：过去时间不可提交并提示
+ * - F6 根布局补 statusBarsPadding（外层 Scaffold inset 清零后保持顶部留白）
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -107,6 +109,9 @@ fun HomeScreen(viewModel: NotifyViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // F6（2026-08-16 13:56）：外层 Scaffold inset 清零后，
+            // 本页无 TopAppBar，需自行补状态栏留白
+            .statusBarsPadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)

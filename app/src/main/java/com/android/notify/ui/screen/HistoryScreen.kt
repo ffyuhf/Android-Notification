@@ -1,9 +1,12 @@
 package com.android.notify.ui.screen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
@@ -85,6 +88,12 @@ import java.util.Locale
  * F4 搜索入口移至"历史记录"标题旁
  * F5 移除顶栏"清空全部"按钮（清空走"长按→全选→删除选中"）
  *
+ * 修正（2026-08-16 13:56 | F6-F8）：
+ * F6 顶栏上方空白根因 = 嵌套 Scaffold 状态栏 inset 双算（MainActivity 外层
+ *    contentWindowInsets 清零后自动消除，本文件无列表改动）
+ * F7 普通/搜索顶栏合并为单 TopAppBar，搜索框从按钮位置 expandHorizontally 展开
+ * F8 搜索图标恢复 24dp 与"历史记录"标题视觉等大
+ *
  * 增强（2026-08-16 12:53 | H1/H2/H3）
  *
  * 创建日期：2026-05-14
@@ -153,13 +162,12 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
 
     Scaffold(
         topBar = {
-            // ===== 三态顶栏（F2 修正 2026-08-16 13:30）：AnimatedContent 淡入+滑动过渡，消除切换生硬感 =====
+            // ===== 双态顶栏（F2/F7 修正 2026-08-16 13:56）：
+            // 多选态与普通/搜索态的整体切换用 AnimatedContent 淡入+滑动过渡；
+            // 普通↔搜索 态合并为单 TopAppBar，title 内 AnimatedVisibility
+            // 实现搜索框从按钮位置展开/收缩（F7），消除整栏横滑的生硬感 =====
             AnimatedContent(
-                targetState = when {
-                    selectionMode -> TopBarState.MULTI_SELECT
-                    isSearching -> TopBarState.SEARCH
-                    else -> TopBarState.NORMAL
-                },
+                targetState = if (selectionMode) TopBarState.MULTI_SELECT else TopBarState.CONTENT,
                 transitionSpec = {
                     (fadeIn(animationSpec = tween(200)) +
                         slideInHorizontally(animationSpec = tween(200)) { it / 8 })
@@ -191,63 +199,83 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                         )
                     }
 
-                    // ===== 搜索态顶栏（H3） =====
-                    TopBarState.SEARCH -> {
+                    // ===== 普通/搜索合并态顶栏（F3/F4/F5/F7/F8 修正 2026-08-16 13:56） =====
+                    TopBarState.CONTENT -> {
                         TopAppBar(
                             title = {
-                                OutlinedTextField(
-                                    value = searchQuery,
-                                    onValueChange = { viewModel.setSearchQuery(it) },
-                                    placeholder = { Text(stringResource(R.string.history_search_hint)) },
-                                    singleLine = true,
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                                Icon(
-                                                    Icons.Default.Clear,
-                                                    contentDescription = stringResource(R.string.history_search_clear)
-                                                )
+                                // F7：标题行与搜索框用 AnimatedVisibility 互斥切换——
+                                // 搜索框从标题右侧按钮位置（Alignment.End）向左展开成整行，
+                                // 关闭时反向收缩回按钮位置，实现"从按钮扩大成搜索框"的过渡
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    // 搜索框（H3）：进入时从右端展开 + 淡入，退出时向右收缩 + 淡出
+                                    AnimatedVisibility(
+                                        visible = isSearching,
+                                        enter = expandHorizontally(
+                                            expandFrom = Alignment.End,
+                                            animationSpec = tween(220)
+                                        ) + fadeIn(animationSpec = tween(220)),
+                                        exit = shrinkHorizontally(
+                                            shrinkTowards = Alignment.End,
+                                            animationSpec = tween(180)
+                                        ) + fadeOut(animationSpec = tween(180))
+                                    ) {
+                                        OutlinedTextField(
+                                            value = searchQuery,
+                                            onValueChange = { viewModel.setSearchQuery(it) },
+                                            placeholder = { Text(stringResource(R.string.history_search_hint)) },
+                                            singleLine = true,
+                                            trailingIcon = {
+                                                if (searchQuery.isNotEmpty()) {
+                                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                                        Icon(
+                                                            Icons.Default.Clear,
+                                                            contentDescription = stringResource(R.string.history_search_clear)
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                    // 标题行：退出时向左收缩消失，与搜索框右端展开形成衔接
+                                    AnimatedVisibility(
+                                        visible = !isSearching,
+                                        enter = fadeIn(animationSpec = tween(220)),
+                                        exit = shrinkHorizontally(
+                                            shrinkTowards = Alignment.Start,
+                                            animationSpec = tween(180)
+                                        ) + fadeOut(animationSpec = tween(180))
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(stringResource(R.string.history_title))
+                                            if (notifications.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                // F4：搜索入口紧邻"历史记录"标题
+                                                // F8：图标恢复 Material 标准 24dp，与标题文字视觉等大
+                                                IconButton(
+                                                    onClick = { isSearching = true },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Search,
+                                                        contentDescription = stringResource(R.string.history_search)
+                                                    )
+                                                }
                                             }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            },
-                            actions = {
-                                IconButton(onClick = {
-                                    isSearching = false
-                                    viewModel.setSearchQuery("")
-                                }) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
-                                }
-                            }
-                        )
-                    }
-
-                    // ===== 普通顶栏（F3/F4/F5 修正 2026-08-16 13:30） =====
-                    TopBarState.NORMAL -> {
-                        TopAppBar(
-                            title = {
-                                // F4：搜索入口移至标题旁，紧邻"历史记录"文字
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(stringResource(R.string.history_title))
-                                    if (notifications.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = { isSearching = true },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Search,
-                                                contentDescription = stringResource(R.string.history_search),
-                                                modifier = Modifier.size(20.dp)
-                                            )
                                         }
                                     }
                                 }
                             },
                             actions = {
-                                if (notifications.isNotEmpty()) {
+                                if (isSearching) {
+                                    // 搜索态：关闭搜索并清空关键词
+                                    IconButton(onClick = {
+                                        isSearching = false
+                                        viewModel.setSearchQuery("")
+                                    }) {
+                                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
+                                    }
+                                } else if (notifications.isNotEmpty()) {
                                     // F3：布局切换按钮图标跟随当前模式（单列态显示 ViewAgenda，两列态显示 ViewWeek）
                                     IconButton(onClick = {
                                         viewModel.setHistoryLayoutMode(
@@ -448,9 +476,11 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
 }
 
 /**
- * 顶栏三态（F2 新增 2026-08-16）：普通 / 搜索 / 多选，供 AnimatedContent 切换
+ * 顶栏双态（F2 新增 2026-08-16，F7 精简 2026-08-16）：
+ * CONTENT = 普通/搜索合并态（内部 AnimatedVisibility 展开搜索框），
+ * MULTI_SELECT = 多选态，供 AnimatedContent 整体切换
  */
-private enum class TopBarState { NORMAL, SEARCH, MULTI_SELECT }
+private enum class TopBarState { CONTENT, MULTI_SELECT }
 
 /**
  * 空状态提示
