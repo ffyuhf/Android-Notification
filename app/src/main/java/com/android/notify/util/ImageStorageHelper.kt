@@ -18,6 +18,13 @@ import java.io.File
  * - decodeSampledBitmap：两阶段下采样解码，限制目标边长控制内存占用（防 OOM）
  *
  * 新增（2026-08-16 | 图片通知）
+ * 修正（2026-08-16 15:39 | 图片通知闪退修复）：
+ * - 采样率算法 off-by-one：原条件先除以 (sampleSize*2) 再比较，导致采样率始终
+ *   比正确值小一档（4032×3024 照片 @2048 目标 sampleSize 停留在 1，全尺寸解码约
+ *   46MB，为设计内存 4 倍），发送大图与启动全量恢复两路径连锁 OOM 闪退；
+ *   现改为以当前档尺寸比较，保证解码边长 ≤ 目标值
+ * - 追加 OutOfMemoryError 捕获（Error 不被 catch(Exception) 捕获，原防线失效）
+ * - 全方法接入 AppLogger 埋点，供设置页分级别导出
  */
 object ImageStorageHelper {
 
@@ -59,6 +66,7 @@ object ImageStorageHelper {
             val mimeType = resolver.getType(uri)
             // MIME 校验：仅接受图片类型
             if (mimeType == null || !mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+                AppLogger.w(TAG, "复制图片失败：MIME 非图片类型（$mimeType）")
                 return null
             }
 
@@ -74,10 +82,15 @@ object ImageStorageHelper {
                 targetFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
-            } ?: return null
+            } ?: run {
+                AppLogger.w(TAG, "复制图片失败：无法打开源 URI 输入流")
+                return null
+            }
 
+            AppLogger.i(TAG, "图片已复制到私有目录：$fileName")
             targetFile.absolutePath
         } catch (e: Exception) {
+            AppLogger.w(TAG, "复制图片异常", e)
             null
         }
     }
@@ -89,7 +102,10 @@ object ImageStorageHelper {
      */
     fun deleteImage(path: String?) {
         if (path.isNullOrBlank()) return
-        runCatching { File(path).delete() }
+        runCatching {
+            File(path).delete()
+            AppLogger.d(TAG, "已删除图片文件：$path")
+        }
     }
 
     /**
@@ -98,9 +114,18 @@ object ImageStorageHelper {
      * 阶段一：仅读取边界信息计算采样率；阶段二：按采样率解码。
      * 目标边长上限 MAX_DECODE_DIMENSION，防止大图解码 OOM。
      *
+     * 修正（2026-08-16 15:39 | 图片通知闪退修复）：
+     * - 采样率条件以"当前档解码尺寸"比较（原实现误用 sampleSize*2 预降档比较，
+     *   实际解码边长可达目标的 2 倍、内存 4 倍，为图片通知双路径闪退根因之一）
+     * - 追加 OutOfMemoryError 捕获（Error 类型逃逸原 catch(Exception) 防线）
+     *
+     * 注意：本方法含磁盘 IO 与大块内存分配，调用方必须处于后台线程
+     * （通知链路由 sendNotification 的 withContext(IO) 保证，UI 层经
+     * rememberSampledBitmap 的 Dispatchers.IO 保证）。
+     *
      * @param path 图片绝对路径
      * @param maxDimension 目标边长上限（px），默认 2048
-     * @return 解码后的 Bitmap；文件缺失/解码失败返回 null
+     * @return 解码后的 Bitmap；文件缺失/解码失败/OOM 返回 null（调用方回退文本样式）
      */
     fun decodeSampledBitmap(path: String?, maxDimension: Int = MAX_DECODE_DIMENSION): Bitmap? {
         if (path.isNullOrBlank()) return null
@@ -108,20 +133,40 @@ object ImageStorageHelper {
             // 阶段一：读取边界
             val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(path, boundsOptions)
-            if (boundsOptions.outWidth <= 0 || boundsOptions.outHeight <= 0) return null
+            if (boundsOptions.outWidth <= 0 || boundsOptions.outHeight <= 0) {
+                AppLogger.w(TAG, "解码失败：无法读取图片边界（$path）")
+                return null
+            }
 
-            // 计算采样率：2 的幂，使解码尺寸不超过目标边长
+            // 计算采样率：2 的幂。以"当前 sampleSize 下的解码边长"与目标比较：
+            // 只要当前档仍超目标即继续加倍，循环结束时解码边长必然 ≤ maxDimension
             var sampleSize = 1
-            while (boundsOptions.outWidth / (sampleSize * 2) >= maxDimension ||
-                boundsOptions.outHeight / (sampleSize * 2) >= maxDimension
+            while (boundsOptions.outWidth / sampleSize > maxDimension ||
+                boundsOptions.outHeight / sampleSize > maxDimension
             ) {
                 sampleSize *= 2
             }
 
             // 阶段二：按采样率解码
             val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-            BitmapFactory.decodeFile(path, decodeOptions)
+            val bitmap = BitmapFactory.decodeFile(path, decodeOptions)
+            if (bitmap != null) {
+                AppLogger.d(
+                    TAG,
+                    "解码成功 ${bitmap.width}x${bitmap.height}（sampleSize=$sampleSize, " +
+                        "源${boundsOptions.outWidth}x${boundsOptions.outHeight}）"
+                )
+            } else {
+                AppLogger.w(TAG, "解码返回空位图（$path）")
+            }
+            bitmap
+        } catch (e: OutOfMemoryError) {
+            // OOM 属 Error，原 catch(Exception) 无法拦截（本次闪退根因之二）：
+            // 此分支不做大内存分配，仅记日志后返回 null 走文本回退样式
+            AppLogger.e(TAG, "解码 OOM（maxDimension=$maxDimension）：$path", e)
+            null
         } catch (e: Exception) {
+            AppLogger.w(TAG, "解码异常（$path）", e)
             null
         }
     }
@@ -165,4 +210,7 @@ object ImageStorageHelper {
             else -> null
         }
     }
+
+    /** 日志标签（AppLogger 埋点统一使用） */
+    private const val TAG = "ImageStorageHelper"
 }

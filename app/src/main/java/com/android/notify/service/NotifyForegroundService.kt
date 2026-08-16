@@ -14,6 +14,7 @@ import com.android.notify.MainActivity
 import com.android.notify.NotifyApp
 import com.android.notify.R
 import com.android.notify.util.NotificationHelper
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.android.notify.util.AppLogger
 
 /**
  * 通知保活前台服务
@@ -38,6 +40,10 @@ import kotlinx.coroutines.launch
  * - P1 巡检差异恢复：巡检周期仅重发通知栏中缺失的通知，不再全量重发
  * - P3 onDestroy 取消协程作用域，修复泄漏；循环增加 isActive 退出条件
  * - P8 targetSdk 34+ 通过 ServiceCompat 显式指定前台服务类型
+ * - 修正（2026-08-16 15:39 | 图片通知闪退修复）：serviceScope 追加
+ *   CoroutineExceptionHandler——原作用域内未捕获异常（如图片解码 OOM Error）
+ *   直接击穿进程导致「启动即闪退」且每次启动必现；现记 ERROR 日志后进程存活，
+ *   单条失败由 NotificationHelper 恢复循环的 runCatching 二级隔离兜底
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -46,6 +52,9 @@ class NotifyForegroundService : Service() {
     companion object {
         /** 巡检间隔：30秒 */
         private const val CHECK_INTERVAL_MS = 30_000L
+
+        /** 日志标签（AppLogger 埋点统一使用） */
+        private const val TAG = "NotifyFgService"
 
         /** Action：启动服务并恢复所有通知 */
         const val ACTION_START = "com.android.notify.ACTION_START_SERVICE"
@@ -92,8 +101,17 @@ class NotifyForegroundService : Service() {
         }
     }
 
-    /** 协程作用域，用于巡检任务 */
-    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    /**
+     * 协程作用域，用于巡检任务
+     *
+     * 追加 CoroutineExceptionHandler（2026-08-16 15:39 | 图片通知闪退修复）：
+     * 巡检/恢复链路任何未捕获异常仅记日志，不再崩溃进程。
+     */
+    private val serviceScope = CoroutineScope(
+        Dispatchers.IO + Job() + CoroutineExceptionHandler { _, throwable ->
+            AppLogger.e(TAG, "巡检/恢复协程未捕获异常", throwable)
+        }
+    )
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -160,6 +178,7 @@ class NotifyForegroundService : Service() {
      */
     private fun restoreAndStartCheckLoop() {
         serviceScope.launch {
+            AppLogger.i(TAG, "前台服务启动，开始全量恢复固定通知")
             // 启动时全量恢复所有固定通知（服务启动/开机自启场景）
             NotificationHelper.restorePinnedNotifications(this@NotifyForegroundService, restoreAll = true)
             // 启动定期巡检

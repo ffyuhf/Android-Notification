@@ -14,6 +14,8 @@ import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.data.repository.NotificationRepository
 import com.android.notify.receiver.NotificationActionReceiver
 import com.android.notify.receiver.NotificationDismissReceiver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 通知工具类
@@ -72,6 +74,11 @@ object NotificationHelper {
      * 优化（2026-08-16 | P2）：settingsSnapshot 由调用方传入复用，
      * 批量发送时整批仅读取一次 DataStore；传 null 时内部自行读取一次。
      * 优化（2026-08-16 | P5）：setOnlyAlertOnce，通知更新不重复响铃震动。
+     * 修正（2026-08-16 15:39 | 图片通知闪退修复）：
+     * - 图片解码包 withContext(Dispatchers.IO)：原实现跟随调用方线程执行，
+     *   viewModelScope（主线程）发送大图时在主线程做磁盘 IO+位图解码，
+     *   为「发送图片后闪退」根因之三；现固定在 IO 线程解码
+     * - 解码失败/OOM 回退文本样式时记 WARN 日志（供分级别导出排查）
      *
      * @param context 上下文
      * @param entity 通知实体
@@ -110,7 +117,10 @@ object NotificationHelper {
         // 通知样式（新增 2026-08-16 | 图片通知）：
         // 有图且解码成功 → BigPictureStyle 大图优先（不受 multilineDisplay 限制）；
         // 无图或解码失败 → 回退原 BigTextStyle/默认样式（内存受控解码防 OOM）
-        val imageBitmap = entity.imagePath?.let { ImageStorageHelper.decodeSampledBitmap(it) }
+        // 修正（2026-08-16 15:39）：解码固定在 IO 线程执行，不再跟随调用方线程
+        val imageBitmap = entity.imagePath?.let { path ->
+            withContext(Dispatchers.IO) { ImageStorageHelper.decodeSampledBitmap(path) }
+        }
         if (imageBitmap != null) {
             builder.setStyle(
                 NotificationCompat.BigPictureStyle()
@@ -118,12 +128,18 @@ object NotificationHelper {
                     .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
                     .setSummaryText(displayContent)
             )
-        } else if (snapshot.multilineDisplay) {
-            builder.setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(displayContent)
-                    .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
-            )
+        } else {
+            if (entity.imagePath != null) {
+                // 有图片路径但解码失败/文件缺失/OOM → 回退文本样式并记日志
+                AppLogger.w(TAG, "通知 ${entity.notificationId} 图片解码失败，回退文本样式")
+            }
+            if (snapshot.multilineDisplay) {
+                builder.setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(displayContent)
+                        .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
+                )
+            }
         }
 
         // 第二层防护：防删除保护 - 设置 deleteIntent
@@ -214,6 +230,7 @@ object NotificationHelper {
         // 不设置 contentIntent：点击通知体无任何响应，仅按钮可操作
 
         notificationManager.notify(entity.notificationId, builder.build())
+        AppLogger.d(TAG, "通知已发送 barId=${entity.notificationId} 有图=${imageBitmap != null}")
     }
 
     /**
@@ -245,6 +262,9 @@ object NotificationHelper {
      * @param context 上下文
      * @param restoreAll true 全量恢复（服务启动/开机首次恢复）；
      *                   false 差异恢复（巡检周期，仅重发通知栏中缺失的）
+     * 修正（2026-08-16 15:39 | 图片通知闪退修复）：恢复循环单条容错——
+     * 原实现单条异常（如图片 OOM）直接中断整批恢复并击穿 serviceScope 导致
+     * 进程崩溃（「启动即闪退」根因）；现单条 runCatching 隔离，失败记日志继续。
      */
     suspend fun restorePinnedNotifications(context: Context, restoreAll: Boolean = false) {
         val repository = NotificationRepository.getInstance(context)
@@ -263,8 +283,18 @@ object NotificationHelper {
         }
 
         for (entity in entitiesToRestore) {
-            sendNotification(context, entity, snapshot)
+            // 单条容错：runCatching 捕获含 Error 在内的 Throwable，坏记录不拖垮整批
+            runCatching { sendNotification(context, entity, snapshot) }
+                .onFailure { throwable ->
+                    // 直接透传 Throwable：OOM 等 Error 类型堆栈也需完整保留
+                    AppLogger.e(
+                        TAG,
+                        "恢复通知失败 dbId=${entity.id} barId=${entity.notificationId}",
+                        throwable
+                    )
+                }
         }
+        AppLogger.i(TAG, "巡检恢复完成：待恢复 ${entitiesToRestore.size} 条（restoreAll=$restoreAll）")
     }
 
     /**
@@ -296,4 +326,7 @@ object NotificationHelper {
         }
         return candidate
     }
+
+    /** 日志标签（AppLogger 埋点统一使用） */
+    private const val TAG = "NotificationHelper"
 }

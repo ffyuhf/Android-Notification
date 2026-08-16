@@ -7,21 +7,27 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,7 +39,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.android.notify.R
+import com.android.notify.util.AppLogger
 import com.android.notify.viewmodel.NotifyViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 设置页面
@@ -79,6 +89,21 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
         notificationGranted = hasNotificationPermission(context)
         exactAlarmGranted = hasExactAlarmPermission(context)
         onPauseOrDispose { }
+    }
+
+    // ===== 日志导出状态（新增 2026-08-16 15:39 | 日志导出） =====
+    /** 级别选择对话框显隐 */
+    var showLogLevelDialog by remember { mutableStateOf(false) }
+    /** 待导出的最低级别（对话框确认后回填，launcher 回调时消费） */
+    var exportMinLevel by remember { mutableStateOf<AppLogger.LogLevel?>(null) }
+
+    // SAF 文档创建 launcher（零运行时权限）：用户选定保存位置后回调目标 URI
+    val exportLogLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportLog(uri, exportMinLevel)
+        }
     }
 
     Scaffold(
@@ -198,8 +223,80 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                     }
                 )
             }
+
+            // ===== 日志（新增 2026-08-16 15:39 | 日志导出） =====
+            SettingsSectionTitle(text = stringResource(R.string.settings_log_section))
+
+            androidx.compose.material3.ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_export_log)) },
+                supportingContent = { Text(stringResource(R.string.settings_export_log_desc)) },
+                trailingContent = {
+                    OutlinedButton(onClick = { showLogLevelDialog = true }) {
+                        Text(stringResource(R.string.settings_export_log_action))
+                    }
+                }
+            )
         }
     }
+
+    // ===== 级别选择对话框：全部 / INFO及以上 / WARN及以上 / 仅ERROR =====
+    if (showLogLevelDialog) {
+        // 对话框内当前选中项索引（默认"全部"）
+        var selectedLevelIndex by remember { mutableIntStateOf(0) }
+        AlertDialog(
+            onDismissRequest = { showLogLevelDialog = false },
+            title = { Text(stringResource(R.string.settings_export_log)) },
+            text = {
+                Column {
+                    logLevelChoices.forEachIndexed { index, (labelRes, _) ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(stringResource(labelRes)) },
+                            leadingContent = {
+                                androidx.compose.material3.RadioButton(
+                                    selected = selectedLevelIndex == index,
+                                    onClick = { selectedLevelIndex = index }
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogLevelDialog = false
+                        exportMinLevel = logLevelChoices[selectedLevelIndex].second
+                        exportLogLauncher.launch(defaultLogFileName())
+                    }
+                ) {
+                    Text(stringResource(R.string.confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogLevelDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+/** 导出级别选项：文案资源 → 最低级别（null = 全部导出） */
+private val logLevelChoices: List<Pair<Int, AppLogger.LogLevel?>> = listOf(
+    R.string.log_level_all to null,
+    R.string.log_level_info_above to AppLogger.LogLevel.INFO,
+    R.string.log_level_warn_above to AppLogger.LogLevel.WARN,
+    R.string.log_level_error_only to AppLogger.LogLevel.ERROR
+)
+
+/**
+ * 生成导出日志默认文件名：notify_log_日期_时间.txt
+ *
+ * @return 形如 notify_log_20260816_153900.txt 的文件名
+ */
+private fun defaultLogFileName(): String {
+    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    return "notify_log_$timestamp.txt"
 }
 
 /**

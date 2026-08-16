@@ -111,9 +111,21 @@
     <string name="action_change_image">Change Image</string>
     <string name="edit_reply_label">Edit content</string>
 
+    <!-- ===== 日志导出（2026-08-16 15:39 | 图片通知闪退修复与日志导出） ===== -->
+    <string name="settings_log_section">Logs</string>
+    <string name="settings_export_log">Export Logs</string>
+    <string name="settings_export_log_desc">Export app logs filtered by level to a file</string>
+    <string name="settings_export_log_action">Export</string>
+    <string name="log_level_all">All (DEBUG and above)</string>
+    <string name="log_level_info_above">INFO and above</string>
+    <string name="log_level_warn_above">WARN and above</string>
+    <string name="log_level_error_only">ERROR only</string>
+
     <!-- ===== Toast 提示 ===== -->
     <string name="toast_copied">Copied to clipboard</string>
     <string name="toast_notification_sent">Notification sent</string>
     <string name="toast_notification_scheduled">Notification scheduled</string>
     <string name="toast_notification_updated">Notification updated</string>
+    <string name="toast_log_exported">Logs exported</string>
+    <string name="toast_log_export_failed">Failed to export logs</string>
 </resources>

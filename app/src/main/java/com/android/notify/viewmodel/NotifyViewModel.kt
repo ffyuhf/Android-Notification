@@ -1,6 +1,7 @@
 package com.android.notify.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.notify.R
@@ -9,8 +10,10 @@ import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.data.repository.NotificationRepository
 import com.android.notify.service.NotifyForegroundService
 import com.android.notify.util.AlarmScheduler
+import com.android.notify.util.AppLogger
 import com.android.notify.util.ImageStorageHelper
 import com.android.notify.util.NotificationHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 主 ViewModel
@@ -28,8 +32,16 @@ import kotlinx.coroutines.launch
  *
  * 创建日期：2026-05-14
  * 作者：Cline
+ * 修改（2026-08-16 15:39 | 图片通知闪退修复与日志导出）：
+ * - 关键链路（发送/定时/重发/删除）接入 AppLogger 埋点
+ * - 新增 exportLog：设置页分级别导出日志（SAF CreateDocument 零权限）
  */
 class NotifyViewModel(application: Application) : AndroidViewModel(application) {
+
+    private companion object {
+        /** 日志标签（AppLogger 埋点统一使用） */
+        const val TAG = "NotifyViewModel"
+    }
 
     /** 通知数据仓库 */
     private val repository = NotificationRepository.getInstance(application)
@@ -164,6 +176,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             // 启动前台保活服务
             NotifyForegroundService.start(context)
 
+            AppLogger.i(TAG, "立即发送 barId=$notificationId 有图=${imagePath != null}")
             _message.value = R.string.toast_notification_sent
         }
     }
@@ -217,6 +230,11 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             // 设置定时闹钟（使用包含真实ID的entity）
             AlarmScheduler.schedule(context, savedEntity)
 
+            AppLogger.i(
+                TAG,
+                "定时通知已排程 dbId=${savedEntity.id} barId=$notificationId " +
+                    "有图=${imagePath != null} repeat=$repeatType"
+            )
             _message.value = R.string.toast_notification_scheduled
         }
     }
@@ -318,6 +336,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             repository.deleteById(id)
             // 删除记录后清理图片文件（重发链路不会走到这里，图片随记录保留）
             ImageStorageHelper.deleteImage(entity.imagePath)
+            AppLogger.i(TAG, "删除记录 dbId=$id（图片已同步清理）")
         }
     }
 
@@ -440,6 +459,34 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
 
     /** 设置历史记录布局模式（H1）："single"单列, "two_column"两列 */
     fun setHistoryLayoutMode(value: String) { viewModelScope.launch { settings.setHistoryLayoutMode(value) } }
+
+    /**
+     * 导出日志到用户指定的文件 URI（设置页日志导出入口）
+     *
+     * 新增（2026-08-16 15:39 | 图片通知闪退修复与日志导出）
+     *
+     * 实现思路：SAF CreateDocument 返回的 URI 经 contentResolver 输出流写入，
+     * 零运行时权限；读取与写入均在 IO 线程，结果经 message 状态由 UI 层 Toast。
+     *
+     * @param uri SAF 返回的目标文件 URI（设置页 launcher 提供）
+     * @param minLevel 最低导出级别：null 导出全部；否则仅导出该级别及以上
+     */
+    fun exportLog(uri: Uri, minLevel: AppLogger.LogLevel?) {
+        viewModelScope.launch {
+            val success = runCatching {
+                withContext(Dispatchers.IO) {
+                    val content = AppLogger.readForExport(minLevel)
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(content.toByteArray())
+                    } != null
+                }
+            }.getOrDefault(false)
+
+            AppLogger.i(TAG, if (success) "日志导出成功（minLevel=$minLevel）" else "日志导出失败")
+            _message.value =
+                if (success) R.string.toast_log_exported else R.string.toast_log_export_failed
+        }
+    }
 
     /**
      * 清除消息状态

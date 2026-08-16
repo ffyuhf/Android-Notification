@@ -111,9 +111,21 @@
     <string name="action_change_image">更换图片</string>
     <string name="edit_reply_label">编辑内容</string>
 
+    <!-- ===== 日志导出（2026-08-16 15:39 | 图片通知闪退修复与日志导出） ===== -->
+    <string name="settings_log_section">日志</string>
+    <string name="settings_export_log">导出日志</string>
+    <string name="settings_export_log_desc">按级别筛选应用日志并导出为文件</string>
+    <string name="settings_export_log_action">导出</string>
+    <string name="log_level_all">全部（DEBUG 及以上）</string>
+    <string name="log_level_info_above">INFO 及以上</string>
+    <string name="log_level_warn_above">WARN 及以上</string>
+    <string name="log_level_error_only">仅 ERROR</string>
+
     <!-- ===== Toast 提示 ===== -->
     <string name="toast_copied">已复制到剪贴板</string>
     <string name="toast_notification_sent">通知已发送</string>
     <string name="toast_notification_scheduled">通知已定时</string>
     <string name="toast_notification_updated">通知已更新</string>
+    <string name="toast_log_exported">日志已导出</string>
+    <string name="toast_log_export_failed">日志导出失败</string>
 </resources>

@@ -69,7 +69,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,7 +76,7 @@ import androidx.compose.ui.unit.dp
 import com.android.notify.EditNotificationActivity
 import com.android.notify.R
 import com.android.notify.data.db.entity.NotificationEntity
-import com.android.notify.util.ImageStorageHelper
+import com.android.notify.util.AsyncBitmap
 import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
 import java.text.SimpleDateFormat
@@ -615,15 +614,17 @@ private fun NotificationHistoryItem(
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // 图片缩略图（图片通知，新增 2026-08-16）
+                    // 图片缩略图（图片通知，新增 2026-08-16；
+                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步，
+                    // 原主线程逐项同步解码在多图列表场景线性放大内存与卡顿）
                     if (!notification.imagePath.isNullOrBlank()) {
-                        val thumbBitmap = remember(notification.imagePath) {
-                            ImageStorageHelper.decodeSampledBitmap(notification.imagePath, 400)
-                        }
+                        val thumbBitmap by AsyncBitmap.rememberSampledBitmap(
+                            notification.imagePath, 400
+                        )
                         thumbBitmap?.let { bitmap ->
                             Spacer(modifier = Modifier.height(6.dp))
                             Image(
-                                bitmap = bitmap.asImageBitmap(),
+                                bitmap = bitmap,
                                 contentDescription = stringResource(R.string.action_add_image),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -764,15 +765,16 @@ private fun CompactNotificationCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // 图片缩略图（图片通知，新增 2026-08-16）
+                    // 图片缩略图（图片通知，新增 2026-08-16；
+                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步）
                     if (!notification.imagePath.isNullOrBlank()) {
-                        val thumbBitmap = remember(notification.imagePath) {
-                            ImageStorageHelper.decodeSampledBitmap(notification.imagePath, 300)
-                        }
+                        val thumbBitmap by AsyncBitmap.rememberSampledBitmap(
+                            notification.imagePath, 300
+                        )
                         thumbBitmap?.let { bitmap ->
                             Spacer(modifier = Modifier.height(4.dp))
                             Image(
-                                bitmap = bitmap.asImageBitmap(),
+                                bitmap = bitmap,
                                 contentDescription = stringResource(R.string.action_add_image),
                                 modifier = Modifier
                                     .fillMaxWidth()
