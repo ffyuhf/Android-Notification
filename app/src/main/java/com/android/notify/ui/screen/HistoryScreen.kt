@@ -24,7 +24,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.AlertDialog
@@ -263,7 +263,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(
-                                Icons.Default.Send,
+                                Icons.AutoMirrored.Filled.Send,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -568,7 +568,7 @@ private fun NotificationHistoryItem(
                         // 重新发送
                         IconButton(onClick = onResend) {
                             Icon(
-                                Icons.Default.Send,
+                                Icons.AutoMirrored.Filled.Send,
                                 contentDescription = stringResource(R.string.btn_resend),
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -690,7 +690,7 @@ private fun CompactNotificationCard(
                     Row {
                         IconButton(onClick = onResend, modifier = Modifier.size(32.dp)) {
                             Icon(
-                                Icons.Default.Send,
+                                Icons.AutoMirrored.Filled.Send,
                                 contentDescription = stringResource(R.string.btn_resend),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
