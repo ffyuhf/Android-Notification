@@ -189,7 +189,10 @@ object AppLogger {
         if (file.length() <= MAX_FILE_BYTES) return
 
         val bytes = file.readBytes()
-        val cutIndex = (bytes.size - KEEP_TAIL_BYTES).coerceAtLeast(0)
+        // 整改（2026-08-16 16:07 | CI 编译失败）：KEEP_TAIL_BYTES 为 Long，
+        // 原表达式使 cutIndex 推断为 Long，数组索引/copyOfRange 需要 Int；
+        // 先转 Int 再参与下标运算（1MB 在 Int 范围内）
+        val cutIndex = (bytes.size - KEEP_TAIL_BYTES.toInt()).coerceAtLeast(0)
         // 向后查找首个换行符，从下一行行首开始保留
         var lineStart = cutIndex
         while (lineStart < bytes.size && bytes[lineStart] != '\n'.code.toByte()) {
