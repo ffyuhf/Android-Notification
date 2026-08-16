@@ -1,5 +1,6 @@
 package com.android.notify.ui.screen
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -11,6 +12,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,12 +31,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.AlertDialog
@@ -64,11 +68,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.notify.EditNotificationActivity
 import com.android.notify.R
 import com.android.notify.data.db.entity.NotificationEntity
+import com.android.notify.util.ImageStorageHelper
+import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -95,6 +105,10 @@ import java.util.Locale
  * F7 普通/搜索顶栏合并为单 TopAppBar，搜索框从按钮位置 expandHorizontally 展开
  * F8 搜索图标恢复 24dp 与"历史记录"标题视觉等大
  *
+ * 修正（2026-08-16 14:45 | F9）：
+ * F9 搜索展开锚点修正：F7 锚点 Alignment.End 与按钮实际位置（标题右侧）错位，
+ *    改 Alignment.Start 从按钮位置向右展开/收回；标题行退出改纯淡出消除整栏横滑观感
+ *
  * 增强（2026-08-16 12:53 | H1/H2/H3）
  *
  * 创建日期：2026-05-14
@@ -103,6 +117,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(viewModel: NotifyViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     // ===== 数据流 =====
     val notifications by viewModel.filteredNotifications.collectAsState()
     val allNotifications by viewModel.allNotifications.collectAsState()
@@ -204,19 +220,23 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                     TopBarState.CONTENT -> {
                         TopAppBar(
                             title = {
-                                // F7：标题行与搜索框用 AnimatedVisibility 互斥切换——
-                                // 搜索框从标题右侧按钮位置（Alignment.End）向左展开成整行，
-                                // 关闭时反向收缩回按钮位置，实现"从按钮扩大成搜索框"的过渡
+                                // F7：标题行与搜索框用 AnimatedVisibility 互斥切换，
+                                // 实现"从按钮扩大成搜索框"的过渡
+                                // F9（2026-08-16 14:45）：锚点改 Alignment.Start——
+                                // 搜索按钮位于标题右侧（左半区），搜索框从按钮位置向右展开成整行，
+                                // 关闭时反向收回按钮位置（原 End 锚点错位在右端，叠加标题行反向
+                                // 收缩形成整栏横滑观感）
                                 Box(modifier = Modifier.fillMaxWidth()) {
-                                    // 搜索框（H3）：进入时从右端展开 + 淡入，退出时向右收缩 + 淡出
+                                    // 搜索框（H3）：进入时从按钮位置（Start）向右展开 + 淡入，
+                                    // 退出时向按钮位置（Start）收缩 + 淡出
                                     AnimatedVisibility(
                                         visible = isSearching,
                                         enter = expandHorizontally(
-                                            expandFrom = Alignment.End,
+                                            expandFrom = Alignment.Start,
                                             animationSpec = tween(220)
                                         ) + fadeIn(animationSpec = tween(220)),
                                         exit = shrinkHorizontally(
-                                            shrinkTowards = Alignment.End,
+                                            shrinkTowards = Alignment.Start,
                                             animationSpec = tween(180)
                                         ) + fadeOut(animationSpec = tween(180))
                                     ) {
@@ -238,14 +258,12 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
-                                    // 标题行：退出时向左收缩消失，与搜索框右端展开形成衔接
+                                    // 标题行：退出时仅淡出（F9 去掉横向收缩，
+                                    // 避免与搜索框展开叠加出整栏横滑观感）
                                     AnimatedVisibility(
                                         visible = !isSearching,
                                         enter = fadeIn(animationSpec = tween(220)),
-                                        exit = shrinkHorizontally(
-                                            shrinkTowards = Alignment.Start,
-                                            animationSpec = tween(180)
-                                        ) + fadeOut(animationSpec = tween(180))
+                                        exit = fadeOut(animationSpec = tween(180))
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(stringResource(R.string.history_title))
@@ -385,7 +403,17 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemClick = { if (selectionMode) toggleSelection(notification) },
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
-                            onDelete = { pendingSingleDelete = notification }
+                            onDelete = { pendingSingleDelete = notification },
+                            onEdit = {
+                                // 应用内编辑页入口：负责改标题+图片（新增 2026-08-16）
+                                context.startActivity(
+                                    Intent(context, EditNotificationActivity::class.java).apply {
+                                        action = "EDIT_${notification.id}"
+                                        putExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, notification.id)
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    }
+                                )
+                            }
                         )
                     }
                 }
@@ -409,7 +437,17 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemClick = { if (selectionMode) toggleSelection(notification) },
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
-                            onDelete = { pendingSingleDelete = notification }
+                            onDelete = { pendingSingleDelete = notification },
+                            onEdit = {
+                                // 应用内编辑页入口：负责改标题+图片（新增 2026-08-16）
+                                context.startActivity(
+                                    Intent(context, EditNotificationActivity::class.java).apply {
+                                        action = "EDIT_${notification.id}"
+                                        putExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, notification.id)
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    }
+                                )
+                            }
                         )
                     }
                 }
@@ -530,7 +568,8 @@ private fun NotificationHistoryItem(
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
     onResend: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -566,14 +605,34 @@ private fun NotificationHistoryItem(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
-                    // 内容
+                    // 内容（纯图通知 content 为空串，显示「[图片]」占位）
                     Text(
-                        text = notification.content,
+                        text = notification.content.ifBlank {
+                            stringResource(R.string.image_only_notification)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
+                    // 图片缩略图（图片通知，新增 2026-08-16）
+                    if (!notification.imagePath.isNullOrBlank()) {
+                        val thumbBitmap = remember(notification.imagePath) {
+                            ImageStorageHelper.decodeSampledBitmap(notification.imagePath, 400)
+                        }
+                        thumbBitmap?.let { bitmap ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = stringResource(R.string.action_add_image),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(90.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
                 }
             }
 
@@ -604,6 +663,14 @@ private fun NotificationHistoryItem(
                 // 操作按钮（多选模式下隐藏避免误触）
                 if (!selectionMode) {
                     Row {
+                        // 编辑（应用内编辑页：改标题+图片，新增 2026-08-16）
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.action_edit),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         // 重新发送
                         IconButton(onClick = onResend) {
                             Icon(
@@ -650,7 +717,8 @@ private fun CompactNotificationCard(
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
     onResend: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -686,14 +754,34 @@ private fun CompactNotificationCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                     }
-                    // 内容摘要（2行省略）
+                    // 内容摘要（2行省略；纯图通知显示「[图片]」占位）
                     Text(
-                        text = notification.content,
+                        text = notification.content.ifBlank {
+                            stringResource(R.string.image_only_notification)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    // 图片缩略图（图片通知，新增 2026-08-16）
+                    if (!notification.imagePath.isNullOrBlank()) {
+                        val thumbBitmap = remember(notification.imagePath) {
+                            ImageStorageHelper.decodeSampledBitmap(notification.imagePath, 300)
+                        }
+                        thumbBitmap?.let { bitmap ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = stringResource(R.string.action_add_image),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp)
+                                    .clip(RoundedCornerShape(6.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
                 }
             }
 
@@ -727,6 +815,15 @@ private fun CompactNotificationCard(
                 // 操作小图标（多选模式下隐藏避免误触）
                 if (!selectionMode) {
                     Row {
+                        // 编辑（应用内编辑页：改标题+图片，新增 2026-08-16）
+                        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.action_edit),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         IconButton(onClick = onResend, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,

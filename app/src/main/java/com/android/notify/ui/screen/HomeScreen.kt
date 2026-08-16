@@ -8,6 +8,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,8 +22,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
@@ -34,19 +40,29 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.notify.R
+import com.android.notify.util.ImageStorageHelper
 import com.android.notify.viewmodel.NotifyViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -75,6 +91,44 @@ fun HomeScreen(viewModel: NotifyViewModel) {
     // 输入状态（rememberSaveable：切Tab后保留，U3）
     var title by rememberSaveable { mutableStateOf("") }
     var content by rememberSaveable { mutableStateOf("") }
+
+    // 图片路径状态（新增 2026-08-16 | 图片通知）：
+    // 保存复制到私有目录后的绝对路径字符串（rememberSaveable 持久化，
+    // Photo Picker 返回的 Uri 为临时授权不可跨进程保存）
+    var imagePath by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // 发送/定时输入合法性：正文与图片至少一项（纯图通知支持，v1.1 决策）
+    val isValidInput = content.isNotBlank() || imagePath != null
+
+    // 图片选择协程作用域（复制文件为 IO 操作，不阻塞主线程）
+    val scope = rememberCoroutineScope()
+
+    // 系统照片选择器（PickVisualMedia，零运行时权限）
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val newPath = withContext(Dispatchers.IO) {
+                    ImageStorageHelper.copyToPrivateStorage(context, uri)
+                }
+                if (newPath != null) {
+                    // 替换旧图：删除尚未发送的旧图片文件，防私有目录孤儿残留
+                    val oldPath = imagePath
+                    if (oldPath != null && oldPath != newPath) {
+                        ImageStorageHelper.deleteImage(oldPath)
+                    }
+                    imagePath = newPath
+                }
+            }
+        }
+    }
+
+    /** 移除已选图片（同步删除私有目录文件） */
+    val removeImage: () -> Unit = {
+        ImageStorageHelper.deleteImage(imagePath)
+        imagePath = null
+    }
 
     // 定时发送状态（rememberSaveable：切Tab后保留，U3）
     var showScheduleSection by rememberSaveable { mutableStateOf(false) }
@@ -144,26 +198,70 @@ fun HomeScreen(viewModel: NotifyViewModel) {
             shape = MaterialTheme.shapes.medium
         )
 
+        // 图片选择区域（新增 2026-08-16 | 图片通知）
+        if (imagePath != null) {
+            // 已选图片：预览缩略图 + 移除按钮
+            val previewBitmap = remember(imagePath) {
+                ImageStorageHelper.decodeSampledBitmap(imagePath, 800)
+            }
+            previewBitmap?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = stringResource(R.string.action_add_image),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            TextButton(
+                onClick = removeImage,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(stringResource(R.string.action_remove_image))
+            }
+        } else {
+            // 未选图片：添加入口（系统照片选择器，零权限）
+            OutlinedButton(
+                onClick = {
+                    imagePickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Text(stringResource(R.string.action_add_image))
+            }
+        }
+
         // 操作按钮行
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 立即发送按钮
+            // 立即发送按钮（校验：正文与图片至少一项）
             Button(
                 onClick = {
-                    if (content.isNotBlank()) {
+                    if (isValidInput) {
                         viewModel.sendNow(
                             title = title.ifBlank { null },
-                            content = content
+                            content = content,
+                            imagePath = imagePath
                         )
-                        // 清空输入
+                        // 清空输入（图片文件由数据库记录引用，此处仅清 UI 状态）
                         content = ""
                         title = ""
+                        imagePath = null
                     }
                 },
                 modifier = Modifier.weight(1f),
-                enabled = content.isNotBlank(),
+                enabled = isValidInput,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
@@ -180,7 +278,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
             OutlinedButton(
                 onClick = { showScheduleSection = !showScheduleSection },
                 modifier = Modifier.weight(1f),
-                enabled = content.isNotBlank()
+                enabled = isValidInput
             ) {
                 Icon(
                     Icons.Default.Schedule,
@@ -247,22 +345,24 @@ fun HomeScreen(viewModel: NotifyViewModel) {
                 }
             }
 
-            // 确认定时发送按钮（时间必须在未来，U4）
+            // 确认定时发送按钮（时间必须在未来，U4；正文与图片至少一项）
             Button(
                 onClick = {
                     // 精确闹钟权限惰性检查（U1）：无权限时提示并引导，不发送
                     if (!ensureExactAlarmPermission(context)) return@Button
 
-                    if (content.isNotBlank() && isScheduledTimeValid) {
+                    if (isValidInput && isScheduledTimeValid) {
                         viewModel.scheduleNotification(
                             title = title.ifBlank { null },
                             content = content,
+                            imagePath = imagePath,
                             scheduledAt = scheduledTime,
                             repeatType = repeatType
                         )
-                        // 清空输入
+                        // 清空输入（图片文件由数据库记录引用，此处仅清 UI 状态）
                         content = ""
                         title = ""
+                        imagePath = null
                         scheduledTime = 0L
                         scheduledTimeText = ""
                         repeatType = null
@@ -270,7 +370,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = content.isNotBlank() && isScheduledTimeValid,
+                enabled = isValidInput && isScheduledTimeValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )

@@ -9,6 +9,7 @@ import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.data.repository.NotificationRepository
 import com.android.notify.service.NotifyForegroundService
 import com.android.notify.util.AlarmScheduler
+import com.android.notify.util.ImageStorageHelper
 import com.android.notify.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -128,10 +129,16 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      * 同时保存到历史记录并启动前台服务。
      *
      * @param title 通知标题（可选）
-     * @param content 通知内容
+     * @param content 通知内容（纯图通知传空串）
+     * @param imagePath 图片私有路径（可选；新增 2026-08-16 | 图片通知）
      * @param isPinned 是否固定显示
      */
-    fun sendNow(title: String?, content: String, isPinned: Boolean = true) {
+    fun sendNow(
+        title: String?,
+        content: String,
+        imagePath: String? = null,
+        isPinned: Boolean = true
+    ) {
         viewModelScope.launch {
             val notificationId = NotificationHelper.generateNotificationId(context)
             val currentTime = System.currentTimeMillis()
@@ -143,7 +150,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 isPinned = isPinned,
                 isActive = true,
                 notificationId = notificationId,
-                isAntiDeleteEnabled = true
+                isAntiDeleteEnabled = true,
+                imagePath = imagePath
             )
 
             // 保存到数据库并获取真实ID，确保Intent中携带正确的数据库ID
@@ -166,7 +174,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      * 创建通知记录并设置 AlarmManager 定时触发。
      *
      * @param title 通知标题（可选）
-     * @param content 通知内容
+     * @param content 通知内容（纯图通知传空串）
+     * @param imagePath 图片私有路径（可选；新增 2026-08-16 | 图片通知）
      * @param scheduledAt 定时触发时间戳（毫秒）
      * @param repeatType 重复类型（null/时/日/周/月/年）
      * @param isPinned 是否固定显示
@@ -174,6 +183,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     fun scheduleNotification(
         title: String?,
         content: String,
+        imagePath: String? = null,
         scheduledAt: Long,
         repeatType: String?,
         isPinned: Boolean = true
@@ -194,7 +204,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 // 误判为"被删除的固定通知"而提前补发（设定19分18分提前出现）
                 isActive = false,
                 notificationId = notificationId,
-                isAntiDeleteEnabled = true
+                isAntiDeleteEnabled = true,
+                imagePath = imagePath
             )
 
             // 保存到数据库并回填真实ID（修复 2026-08-16 | B1）：
@@ -296,6 +307,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      *
      * 优化（2026-08-16 12:51 | B11）：删除前先清理该记录的通知栏通知与残留闹钟，
      * 避免删库后通知栏残留、定时闹钟仍触发。
+     * 优化（2026-08-16 | 图片通知）：删除后同步清理私有目录图片文件，防存储泄漏。
      *
      * @param id 数据库ID
      */
@@ -304,13 +316,16 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             val entity = repository.getById(id) ?: return@launch
             cancelNotificationSideEffects(entity)
             repository.deleteById(id)
+            // 删除记录后清理图片文件（重发链路不会走到这里，图片随记录保留）
+            ImageStorageHelper.deleteImage(entity.imagePath)
         }
     }
 
     /**
      * 批量删除历史通知记录（H2 新增，多选删除使用）
      *
-     * 删除前逐条清理通知栏通知与残留闹钟（B11 链路）。
+     * 删除前逐条清理通知栏通知与残留闹钟（B11 链路）；
+     * 删除后逐条清理私有目录图片文件（图片通知）。
      *
      * @param ids 数据库主键ID集合
      */
@@ -319,18 +334,22 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             val entities = repository.allNotifications.first().filter { it.id in ids }
             entities.forEach { cancelNotificationSideEffects(it) }
             repository.deleteByIds(ids)
+            entities.forEach { ImageStorageHelper.deleteImage(it.imagePath) }
         }
     }
 
     /**
      * 清空所有历史记录
      *
-     * 优化（2026-08-16 12:51 | B11）：清空前逐条清理通知栏通知与残留闹钟。
+     * 优化（2026-08-16 12:51 | B11）：清空前逐条清理通知栏通知与残留闹钟；
+     * 清空后逐条清理私有目录图片文件（图片通知）。
      */
     fun deleteAllNotifications() {
         viewModelScope.launch {
-            repository.allNotifications.first().forEach { cancelNotificationSideEffects(it) }
+            val all = repository.allNotifications.first()
+            all.forEach { cancelNotificationSideEffects(it) }
             repository.deleteAll()
+            all.forEach { ImageStorageHelper.deleteImage(it.imagePath) }
         }
     }
 
@@ -348,19 +367,34 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 更新通知内容（编辑功能）
+     * 更新通知内容（应用内编辑页，支持图片）
+     *
+     * 改造（2026-08-16 | 图片通知）：改用全量实体更新（updateNotification），
+     * 支持同步写入/移除图片路径；imagePath 传 null 即移除图片。
+     * 通知栏内联编辑（仅正文）仍走 repository.updateContent 链路，不受影响。
      *
      * @param id 数据库ID
      * @param title 新标题
-     * @param content 新内容
+     * @param content 新内容（纯图通知传空串）
+     * @param imagePath 图片私有路径；null 表示无图/移除图片
      */
-    fun updateNotificationContent(id: Int, title: String?, content: String) {
+    fun updateNotificationContent(id: Int, title: String?, content: String, imagePath: String?) {
         viewModelScope.launch {
-            repository.updateContent(id, title, content)
+            val entity = repository.getById(id) ?: return@launch
+
+            // 替换图片时清理旧图片文件，避免私有目录膨胀（移除图片同路径清理）
+            if (entity.imagePath != imagePath) {
+                ImageStorageHelper.deleteImage(entity.imagePath)
+            }
+
+            val updatedEntity = entity.copy(
+                title = title,
+                content = content,
+                imagePath = imagePath
+            )
+            repository.updateNotification(updatedEntity)
 
             // 重新发送更新后的通知
-            val entity = repository.getById(id) ?: return@launch
-            val updatedEntity = entity.copy(title = title, content = content)
             NotificationHelper.sendNotification(context, updatedEntity, settings.getSnapshot())
         }
     }

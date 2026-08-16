@@ -65,5 +65,17 @@ data class NotificationEntity(
     val notificationId: Int,
 
     /** 是否启用防删除保护 */
-    val isAntiDeleteEnabled: Boolean = true
+    val isAntiDeleteEnabled: Boolean = true,
+
+    /**
+     * 图片存储路径（可选）
+     *
+     * 图片经 Photo Picker 选择后复制到应用私有目录
+     * （filesDir/notification_images/）的绝对路径，用于通知栏 BigPictureStyle
+     * 大图展示与历史记录缩略图。null 表示该通知无图片。
+     * 纯图通知时 content 存空串 ""，由发送条件「正文与图片至少一项」约束。
+     *
+     * 新增（2026-08-16 | 图片通知）：数据库 version 1→2 经 ALTER TABLE 增加本列
+     */
+    val imagePath: String? = null
 )

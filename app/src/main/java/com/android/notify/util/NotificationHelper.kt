@@ -5,7 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import com.android.notify.EditNotificationActivity
+import androidx.core.app.RemoteInput
 import com.android.notify.NotifyApp
 import com.android.notify.R
 import com.android.notify.data.datastore.NotificationSettingsSnapshot
@@ -37,8 +37,19 @@ object NotificationHelper {
     /** 复制操作 Action */
     const val ACTION_COPY = "com.android.notify.ACTION_COPY"
 
-    /** 编辑操作 Action */
+    /**
+     * 编辑操作 Action
+     *
+     * 改造（2026-08-16 | 通知栏内联编辑）：原为打开应用内编辑页（PendingIntent.getActivity），
+     * 现改为带 RemoteInput 的广播内联编辑（Shizuku 同款 Direct Reply 交互）。
+     */
     const val ACTION_EDIT = "com.android.notify.ACTION_EDIT"
+
+    /** 内联编辑回复 Action（RemoteInput 结果回传） */
+    const val ACTION_EDIT_REPLY = "com.android.notify.ACTION_EDIT_REPLY"
+
+    /** RemoteInput 键：内联编辑的正文输入框 */
+    const val KEY_EDIT_CONTENT = "edit_content"
 
     /** 取消固定操作 Action */
     const val ACTION_UNPIN = "com.android.notify.ACTION_UNPIN"
@@ -78,10 +89,15 @@ object NotificationHelper {
         // 读取设置：优先使用调用方传入的快照，避免重复 DataStore IO（P2）
         val snapshot = settingsSnapshot ?: SettingsDataStore(context).getSnapshot()
 
+        // 纯图通知（content 为空串）折叠视图/回退文本统一显示占位文案「[图片]」
+        val displayContent = entity.content.ifBlank {
+            context.getString(R.string.image_only_notification)
+        }
+
         val builder = NotificationCompat.Builder(context, NotifyApp.CHANNEL_PINNED)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(entity.title ?: context.getString(R.string.app_name))
-            .setContentText(entity.content)
+            .setContentText(displayContent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // 重发场景按用户设置决定是否响铃提醒（B10/D3）；其余发送默认响铃
             .setDefaults(if (soundEnabled) NotificationCompat.DEFAULT_ALL else 0)
@@ -91,11 +107,21 @@ object NotificationHelper {
             // 第一层防护：设置通知为持续性（不可滑动删除）
             .setOngoing(entity.isPinned)
 
-        // 多行显示样式
-        if (snapshot.multilineDisplay) {
+        // 通知样式（新增 2026-08-16 | 图片通知）：
+        // 有图且解码成功 → BigPictureStyle 大图优先（不受 multilineDisplay 限制）；
+        // 无图或解码失败 → 回退原 BigTextStyle/默认样式（内存受控解码防 OOM）
+        val imageBitmap = entity.imagePath?.let { ImageStorageHelper.decodeSampledBitmap(it) }
+        if (imageBitmap != null) {
+            builder.setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(imageBitmap)
+                    .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
+                    .setSummaryText(displayContent)
+            )
+        } else if (snapshot.multilineDisplay) {
             builder.setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText(entity.content)
+                    .bigText(displayContent)
                     .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
             )
         }
@@ -116,8 +142,8 @@ object NotificationHelper {
             builder.setDeleteIntent(dismissPendingIntent)
         }
 
-        // 复制按钮
-        if (snapshot.showCopyButton) {
+        // 复制按钮（纯图通知 content 为空无内容可复制，不添加）
+        if (snapshot.showCopyButton && entity.content.isNotBlank()) {
             val copyIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = ACTION_COPY
                 putExtra(EXTRA_NOTIFICATION_ID, entity.id)
@@ -136,24 +162,33 @@ object NotificationHelper {
             )
         }
 
-        // 编辑按钮（添加唯一 action 确保 PendingIntent 不被系统合并）
+        // 编辑按钮（改造 2026-08-16 | 通知栏内联编辑）：
+        // 由 PendingIntent.getActivity 打开应用内编辑页，改为带 RemoteInput 的广播，
+        // 点击后在系统内联输入框直接编辑正文（Shizuku 同款交互）。
+        // requestCode 契约保持不变（notificationId*10+2）。
         if (snapshot.showEditButton) {
-            val editIntent = Intent(context, EditNotificationActivity::class.java).apply {
-                action = "EDIT_${entity.id}"
+            val remoteInput = RemoteInput.Builder(KEY_EDIT_CONTENT)
+                .setLabel(context.getString(R.string.edit_reply_label))
+                .build()
+            val editIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+                action = ACTION_EDIT_REPLY
                 putExtra(EXTRA_NOTIFICATION_ID, entity.id)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_NOTIFICATION_BAR_ID, entity.notificationId)
             }
-            val editPendingIntent = PendingIntent.getActivity(
+            val editPendingIntent = PendingIntent.getBroadcast(
                 context,
                 entity.notificationId * 10 + 2,
                 editIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            builder.addAction(
+            val editAction = NotificationCompat.Action.Builder(
                 R.drawable.ic_edit,
                 context.getString(R.string.action_edit),
                 editPendingIntent
             )
+                .addRemoteInput(remoteInput)
+                .build()
+            builder.addAction(editAction)
         }
 
         // 取消固定按钮
