@@ -39,8 +39,6 @@
     <string name="history_empty">暂无通知历史记录</string>
     <string name="btn_resend">重新发送</string>
     <string name="btn_delete">删除</string>
-    <string name="btn_delete_all">清空全部</string>
-    <string name="confirm_delete">确定要删除所有通知记录吗？</string>
 
     <!-- ===== 历史记录增强（2026-08-16 | H1/H2/H3） ===== -->
     <string name="history_search">搜索</string>

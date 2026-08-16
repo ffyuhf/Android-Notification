@@ -1,5 +1,11 @@
 package com.android.notify.ui.screen
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -71,7 +77,13 @@ import java.util.Locale
  * 2. 每条记录可重新发送或删除（删除需二次确认，H2）
  * 3. 长按进入多选模式：全选 / 反选、批量删除 / 批量发送（H2）
  * 4. 顶栏搜索实时过滤标题与内容（H3）
- * 5. 清空全部功能（带确认对话框）
+ *
+ * 修正（2026-08-16 13:30 | F1-F5）：
+ * F1 两列网格 Spacer item 占格导致左上空白/首条靠右/非Z字形 → 改 contentPadding
+ * F2 顶栏三态切换 AnimatedContent 淡入+滑动动画
+ * F3 布局切换图标改为跟随当前模式
+ * F4 搜索入口移至"历史记录"标题旁
+ * F5 移除顶栏"清空全部"按钮（清空走"长按→全选→删除选中"）
  *
  * 增强（2026-08-16 12:53 | H1/H2/H3）
  *
@@ -97,8 +109,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
     val selectedIds = remember { mutableStateMapOf<Int, Boolean>() }
 
     // ===== 对话框状态 =====
-    /** 清空全部确认 */
-    var showDeleteAllDialog by remember { mutableStateOf(false) }
     /** 单条删除确认（H2 二级确认） */
     var pendingSingleDelete by remember { mutableStateOf<NotificationEntity?>(null) }
     /** 批量删除确认（H2） */
@@ -143,100 +153,120 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
 
     Scaffold(
         topBar = {
-            when {
-                // ===== 多选模式顶栏（H2） =====
-                selectionMode -> {
-                    TopAppBar(
-                        navigationIcon = {
-                            IconButton(onClick = exitSelection) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.history_exit_multi_select)
-                                )
+            // ===== 三态顶栏（F2 修正 2026-08-16 13:30）：AnimatedContent 淡入+滑动过渡，消除切换生硬感 =====
+            AnimatedContent(
+                targetState = when {
+                    selectionMode -> TopBarState.MULTI_SELECT
+                    isSearching -> TopBarState.SEARCH
+                    else -> TopBarState.NORMAL
+                },
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(200)) +
+                        slideInHorizontally(animationSpec = tween(200)) { it / 8 })
+                        .togetherWith(fadeOut(animationSpec = tween(150)))
+                },
+                label = "HistoryTopBar"
+            ) { state ->
+                when (state) {
+                    // ===== 多选模式顶栏（H2） =====
+                    TopBarState.MULTI_SELECT -> {
+                        TopAppBar(
+                            navigationIcon = {
+                                IconButton(onClick = exitSelection) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = stringResource(R.string.history_exit_multi_select)
+                                    )
+                                }
+                            },
+                            title = { Text(stringResource(R.string.history_selected_count, selectedIds.size)) },
+                            actions = {
+                                TextButton(onClick = selectAllVisible) {
+                                    Text(stringResource(R.string.history_select_all))
+                                }
+                                TextButton(onClick = invertVisibleSelection) {
+                                    Text(stringResource(R.string.history_invert_selection))
+                                }
                             }
-                        },
-                        title = { Text(stringResource(R.string.history_selected_count, selectedIds.size)) },
-                        actions = {
-                            TextButton(onClick = selectAllVisible) {
-                                Text(stringResource(R.string.history_select_all))
-                            }
-                            TextButton(onClick = invertVisibleSelection) {
-                                Text(stringResource(R.string.history_invert_selection))
-                            }
-                        }
-                    )
-                }
+                        )
+                    }
 
-                // ===== 搜索态顶栏（H3） =====
-                isSearching -> {
-                    TopAppBar(
-                        title = {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setSearchQuery(it) },
-                                placeholder = { Text(stringResource(R.string.history_search_hint)) },
-                                singleLine = true,
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                    // ===== 搜索态顶栏（H3） =====
+                    TopBarState.SEARCH -> {
+                        TopAppBar(
+                            title = {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.setSearchQuery(it) },
+                                    placeholder = { Text(stringResource(R.string.history_search_hint)) },
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                                Icon(
+                                                    Icons.Default.Clear,
+                                                    contentDescription = stringResource(R.string.history_search_clear)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            },
+                            actions = {
+                                IconButton(onClick = {
+                                    isSearching = false
+                                    viewModel.setSearchQuery("")
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
+                                }
+                            }
+                        )
+                    }
+
+                    // ===== 普通顶栏（F3/F4/F5 修正 2026-08-16 13:30） =====
+                    TopBarState.NORMAL -> {
+                        TopAppBar(
+                            title = {
+                                // F4：搜索入口移至标题旁，紧邻"历史记录"文字
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.history_title))
+                                    if (notifications.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = { isSearching = true },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
                                             Icon(
-                                                Icons.Default.Clear,
-                                                contentDescription = stringResource(R.string.history_search_clear)
+                                                Icons.Default.Search,
+                                                contentDescription = stringResource(R.string.history_search),
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                isSearching = false
-                                viewModel.setSearchQuery("")
-                            }) {
-                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
-                            }
-                        }
-                    )
-                }
-
-                // ===== 普通顶栏 =====
-                else -> {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.history_title)) },
-                        actions = {
-                            if (notifications.isNotEmpty()) {
-                                // 搜索按钮（H3）
-                                IconButton(onClick = { isSearching = true }) {
-                                    Icon(
-                                        Icons.Default.Search,
-                                        contentDescription = stringResource(R.string.history_search)
-                                    )
                                 }
-                                // 布局切换按钮（H1）：图标显示目标模式，点击即切换
-                                IconButton(onClick = {
-                                    viewModel.setHistoryLayoutMode(
-                                        if (isTwoColumn) "single" else "two_column"
-                                    )
-                                }) {
-                                    Icon(
-                                        imageVector = if (isTwoColumn) Icons.Default.ViewAgenda else Icons.Default.ViewWeek,
-                                        contentDescription = stringResource(
-                                            if (isTwoColumn) R.string.history_layout_single
-                                            else R.string.history_layout_two_column
+                            },
+                            actions = {
+                                if (notifications.isNotEmpty()) {
+                                    // F3：布局切换按钮图标跟随当前模式（单列态显示 ViewAgenda，两列态显示 ViewWeek）
+                                    IconButton(onClick = {
+                                        viewModel.setHistoryLayoutMode(
+                                            if (isTwoColumn) "single" else "two_column"
                                         )
-                                    )
-                                }
-                                // 清空全部按钮
-                                TextButton(onClick = { showDeleteAllDialog = true }) {
-                                    Text(
-                                        text = stringResource(R.string.btn_delete_all),
-                                        color = MaterialTheme.colorScheme.error
-                                    )
+                                    }) {
+                                        Icon(
+                                            imageVector = if (isTwoColumn) Icons.Default.ViewWeek else Icons.Default.ViewAgenda,
+                                            contentDescription = stringResource(
+                                                if (isTwoColumn) R.string.history_layout_single
+                                                else R.string.history_layout_two_column
+                                            )
+                                        )
+                                    }
+                                    // F5：清空全部按钮已移除，清空场景走"长按→全选→删除选中"
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         },
@@ -303,10 +333,14 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                 EmptyHistory(message = stringResource(R.string.history_no_match), paddingValues = paddingValues)
             }
 
-            // ===== 两列网格（H1） =====
+            // ===== 两列网格（F1 修正 2026-08-16 13:30） =====
+            // 原实现用 item{Spacer} 做上下留白，Spacer 会独占第一列首格，
+            // 导致左上大片空白、首条记录排右上、整体非Z字形。
+            // 改用 contentPadding 后网格恢复 1 2 / 3 4 行优先 Z 字形排布。
             isTwoColumn -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -314,8 +348,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
-
                     gridItems(notifications, key = { it.id }) { notification ->
                         CompactNotificationCard(
                             notification = notification,
@@ -327,22 +359,19 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onDelete = { pendingSingleDelete = notification }
                         )
                     }
-
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
             }
 
-            // ===== 单列列表 =====
+            // ===== 单列列表（F1：改 contentPadding 保持与网格一致的上下留白） =====
             else -> {
                 LazyColumn(
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
-
                     items(notifications, key = { it.id }) { notification ->
                         NotificationHistoryItem(
                             notification = notification,
@@ -354,8 +383,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onDelete = { pendingSingleDelete = notification }
                         )
                     }
-
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
             }
         }
@@ -416,33 +443,14 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
         )
     }
 
-    // ===== 清空全部确认（保留） =====
-    if (showDeleteAllDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteAllDialog = false },
-            title = { Text(stringResource(R.string.btn_delete_all)) },
-            text = { Text(stringResource(R.string.confirm_delete)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteAllNotifications()
-                        showDeleteAllDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text(stringResource(R.string.confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteAllDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
-    }
+    // F5（2026-08-16 13:30）：清空全部确认框已随顶栏按钮一并移除，
+    // 清空场景走"长按 → 全选 → 删除选中"（deleteAllNotifications 保留为数据层 API）。
 }
+
+/**
+ * 顶栏三态（F2 新增 2026-08-16）：普通 / 搜索 / 多选，供 AnimatedContent 切换
+ */
+private enum class TopBarState { NORMAL, SEARCH, MULTI_SELECT }
 
 /**
  * 空状态提示

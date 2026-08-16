@@ -39,8 +39,6 @@
     <string name="history_empty">No notification history yet</string>
     <string name="btn_resend">Resend</string>
     <string name="btn_delete">Delete</string>
-    <string name="btn_delete_all">Delete All</string>
-    <string name="confirm_delete">Are you sure you want to delete all notifications?</string>
 
     <!-- ===== 历史记录增强（2026-08-16 | H1/H2/H3） ===== -->
     <string name="history_search">Search</string>
