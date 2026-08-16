@@ -43,6 +43,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 val settings = SettingsDataStore(context)
                 NotificationHelper.sendNotification(context, entity, settings.getSnapshot())
 
+                // 标记为已激活，纳入防删除三层保护（B9 修复）：
+                // 定时记录创建时为 isActive=false，触发前被巡检/恢复链路天然排除，
+                // 触发后才置为 true，杜绝"未到期定时通知被巡检误发"（设定19分18分提前出现）
+                repository.activateById(entity.id)
+
                 // 处理重复通知：以上次理论触发时间为基准（B6）
                 if (entity.repeatType != null) {
                     scheduleNextRepeating(context, repository, entity)

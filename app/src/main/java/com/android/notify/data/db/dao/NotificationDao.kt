@@ -111,6 +111,17 @@ interface NotificationDao {
     suspend fun deactivateById(id: Int)
 
     /**
+     * 将指定通知标记为活跃（定时通知触发后使用）
+     *
+     * B9 修复（2026-08-16）：定时记录创建时为 isActive=false，
+     * 触发后才置为 true，纳入防删除三层保护；与 deactivateById 对称。
+     *
+     * @param id 数据库主键ID
+     */
+    @Query("UPDATE notifications SET isActive = 1 WHERE id = :id")
+    suspend fun activateById(id: Int)
+
+    /**
      * 更新定时触发时间
      *
      * 重复通知触发后回写下次触发时间，作为下次周期计算的基准，

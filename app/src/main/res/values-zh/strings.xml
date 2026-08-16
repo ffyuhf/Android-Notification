@@ -51,6 +51,8 @@
     <string name="settings_multiline_display">多行显示</string>
     <string name="settings_anti_delete">防删除保护</string>
     <string name="settings_anti_delete_desc">自动恢复被删除的固定通知</string>
+    <string name="settings_resend_sound">重发响铃</string>
+    <string name="settings_resend_sound_desc">从历史记录重新发送时播放提示音</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_dark_mode">深色模式</string>
     <string name="settings_language">语言</string>

@@ -51,6 +51,8 @@
     <string name="settings_multiline_display">Multiline Display</string>
     <string name="settings_anti_delete">Anti-Delete Protection</string>
     <string name="settings_anti_delete_desc">Automatically restore deleted pinned notifications</string>
+    <string name="settings_resend_sound">Resend Sound</string>
+    <string name="settings_resend_sound_desc">Play sound when resending from history</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_language">Language</string>

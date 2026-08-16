@@ -65,11 +65,13 @@ object NotificationHelper {
      * @param context 上下文
      * @param entity 通知实体
      * @param settingsSnapshot 设置快照（可选，批量场景复用）
+     * @param soundEnabled 是否响铃提醒（默认true；B10 重发场景按用户设置决定）
      */
     suspend fun sendNotification(
         context: Context,
         entity: NotificationEntity,
-        settingsSnapshot: NotificationSettingsSnapshot? = null
+        settingsSnapshot: NotificationSettingsSnapshot? = null,
+        soundEnabled: Boolean = true
     ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -81,7 +83,8 @@ object NotificationHelper {
             .setContentTitle(entity.title ?: context.getString(R.string.app_name))
             .setContentText(entity.content)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // 重发场景按用户设置决定是否响铃提醒（B10/D3）；其余发送默认响铃
+            .setDefaults(if (soundEnabled) NotificationCompat.DEFAULT_ALL else 0)
             // 更新已存在的通知时不再响铃震动，仅首次发送提醒（P5）
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)

@@ -73,6 +73,10 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     val language: StateFlow<String> = settings.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "system")
 
+    /** 历史重发时是否响铃提醒 */
+    val resendSoundEnabled: StateFlow<Boolean> = settings.resendSoundEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     // ===== UI 状态 =====
 
     /**
@@ -150,7 +154,10 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 scheduledAt = scheduledAt,
                 repeatType = repeatType,
                 isPinned = isPinned,
-                isActive = true,
+                // B9 修复：定时记录创建时为 isActive=false（未触发、不在通知栏），
+                // 由 AlarmReceiver 到点触发后置为 true；避免被前台服务巡检
+                // 误判为"被删除的固定通知"而提前补发（设定19分18分提前出现）
+                isActive = false,
                 notificationId = notificationId,
                 isAntiDeleteEnabled = true
             )
@@ -171,27 +178,46 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 重新发送历史通知
      *
-     * 从历史记录中选择一条通知重新发送。
+     * 修复（2026-08-16 | B10）：原实现 copy(id=0) 插入新记录，导致历史记录重复累积。
+     * 现改为更新原记录而非插入：刷新 createdAt 实现置顶（列表按 createdAt 降序），
+     * 清空定时字段避免未触发定时记录被置为 isActive=true 后重新进入误发路径，
+     * 取消旧闹钟与旧通知，重新生成通知栏ID以响铃提醒（D3），
+     * 并启动前台保活服务与"立即发送"行为对齐（D4）。
      *
      * @param entity 历史通知实体
      */
     fun resendNotification(entity: NotificationEntity) {
         viewModelScope.launch {
+            // 取消可能残留的定时闹钟（须在更换 notificationId 前用旧值取消）
+            AlarmScheduler.cancel(context, entity.id, entity.notificationId)
+            // 清除通知栏可能残留的旧 ID 通知
+            NotificationHelper.cancelNotification(context, entity.notificationId)
+
+            // 生成新通知栏ID：新 ID 首次发布可响铃提醒，不受 setOnlyAlertOnce 静默影响
             val notificationId = NotificationHelper.generateNotificationId(context)
 
-            val newEntity = entity.copy(
-                id = 0,
+            // 更新原记录：createdAt 置顶；清空定时字段转为即时通知
+            val updatedEntity = entity.copy(
                 createdAt = System.currentTimeMillis(),
-                notificationId = notificationId,
+                scheduledAt = null,
+                repeatType = null,
                 isActive = true,
-                isPinned = true
+                isPinned = true,
+                notificationId = notificationId
+            )
+            repository.updateNotification(updatedEntity)
+
+            // 重发是否响铃由用户设置决定（默认开启，可关闭静默弹出）
+            val snapshot = settings.getSnapshot()
+            NotificationHelper.sendNotification(
+                context,
+                updatedEntity,
+                snapshot,
+                soundEnabled = snapshot.resendSoundEnabled
             )
 
-            // 保存到数据库并获取真实ID，确保Intent中携带正确的数据库ID
-            val rowId = repository.insertNotification(newEntity)
-            val savedEntity = newEntity.copy(id = rowId.toInt())
-
-            NotificationHelper.sendNotification(context, savedEntity, settings.getSnapshot())
+            // 与"立即发送"行为对齐：启动前台保活服务（D4）
+            NotifyForegroundService.start(context)
 
             _message.value = R.string.toast_notification_sent
         }
@@ -283,6 +309,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
 
     /** 设置语言 */
     fun setLanguage(value: String) { viewModelScope.launch { settings.setLanguage(value) } }
+
+    /** 设置历史重发是否响铃提醒 */
+    fun setResendSoundEnabled(value: Boolean) { viewModelScope.launch { settings.setResendSoundEnabled(value) } }
 
     /**
      * 清除消息状态

@@ -112,6 +112,16 @@ class NotificationRepository private constructor(context: Context) {
     }
 
     /**
+     * 将通知标记为活跃
+     * 定时通知触发后调用，纳入防删除三层保护（B9 修复）
+     *
+     * @param id 数据库主键ID
+     */
+    suspend fun activateById(id: Int) {
+        dao.activateById(id)
+    }
+
+    /**
      * 更新定时触发时间
      *
      * 重复通知触发后回写下次触发时间，作为下次周期计算基准，

@@ -32,13 +32,15 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
  * @param showUnpinButton 是否显示取消固定按钮
  * @param multilineDisplay 是否多行显示
  * @param antiDeleteProtection 是否启用防删除保护
+ * @param resendSoundEnabled 历史重发时是否响铃提醒
  */
 data class NotificationSettingsSnapshot(
     val showCopyButton: Boolean = true,
     val showEditButton: Boolean = true,
     val showUnpinButton: Boolean = true,
     val multilineDisplay: Boolean = true,
-    val antiDeleteProtection: Boolean = true
+    val antiDeleteProtection: Boolean = true,
+    val resendSoundEnabled: Boolean = true
 )
 
 /**
@@ -69,6 +71,9 @@ class SettingsDataStore(private val context: Context) {
     /** 防删除保护开关 */
     private val keyAntiDeleteProtection = booleanPreferencesKey("anti_delete_protection")
 
+    /** 历史重发响铃提醒开关（B10 新增） */
+    private val keyResendSoundEnabled = booleanPreferencesKey("resend_sound_enabled")
+
     /** 深色模式：system/light/dark */
     private val keyDarkMode = stringPreferencesKey("dark_mode")
 
@@ -92,6 +97,9 @@ class SettingsDataStore(private val context: Context) {
     /** 是否启用防删除保护，默认true */
     val antiDeleteProtection: Flow<Boolean> = context.settingsDataStore.data.map { it[keyAntiDeleteProtection] ?: true }
 
+    /** 历史重发是否响铃提醒，默认true */
+    val resendSoundEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[keyResendSoundEnabled] ?: true }
+
     /** 深色模式设置，默认跟随系统 */
     val darkMode: Flow<String> = context.settingsDataStore.data.map { it[keyDarkMode] ?: "system" }
 
@@ -113,7 +121,8 @@ class SettingsDataStore(private val context: Context) {
             showEditButton = prefs[keyShowEditButton] ?: true,
             showUnpinButton = prefs[keyShowUnpinButton] ?: true,
             multilineDisplay = prefs[keyMultilineDisplay] ?: true,
-            antiDeleteProtection = prefs[keyAntiDeleteProtection] ?: true
+            antiDeleteProtection = prefs[keyAntiDeleteProtection] ?: true,
+            resendSoundEnabled = prefs[keyResendSoundEnabled] ?: true
         )
     }
 
@@ -157,6 +166,14 @@ class SettingsDataStore(private val context: Context) {
      */
     suspend fun setAntiDeleteProtection(value: Boolean) {
         context.settingsDataStore.edit { it[keyAntiDeleteProtection] = value }
+    }
+
+    /**
+     * 设置历史重发是否响铃提醒
+     * @param value true响铃提醒，false静默弹出
+     */
+    suspend fun setResendSoundEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[keyResendSoundEnabled] = value }
     }
 
     /**

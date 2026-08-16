@@ -62,6 +62,7 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
     val showUnpinButton by viewModel.showUnpinButton.collectAsState()
     val multilineDisplay by viewModel.multilineDisplay.collectAsState()
     val antiDeleteProtection by viewModel.antiDeleteProtection.collectAsState()
+    val resendSoundEnabled by viewModel.resendSoundEnabled.collectAsState()
     val darkMode by viewModel.darkMode.collectAsState()
     val language by viewModel.language.collectAsState()
 
@@ -118,6 +119,13 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                 subtitle = stringResource(R.string.settings_anti_delete_desc),
                 checked = antiDeleteProtection,
                 onCheckedChange = { viewModel.setAntiDeleteProtection(it) }
+            )
+
+            SettingsSwitchItem(
+                title = stringResource(R.string.settings_resend_sound),
+                subtitle = stringResource(R.string.settings_resend_sound_desc),
+                checked = resendSoundEnabled,
+                onCheckedChange = { viewModel.setResendSoundEnabled(it) }
             )
 
             // ===== 外观设置 =====
