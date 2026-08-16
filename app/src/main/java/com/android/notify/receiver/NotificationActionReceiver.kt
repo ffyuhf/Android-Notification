@@ -19,8 +19,10 @@ import kotlinx.coroutines.launch
  * - ACTION_COPY：复制通知内容到剪贴板
  * - ACTION_UNPIN：取消固定通知
  *
- * 创建日期：2026-05-14
- * 作者：Cline
+ * 修复（2026-08-16 | B7）：handleUnpin 的数据库操作改用 goAsync()
+ * 延长 Receiver 生命周期，确保异步操作在进程被回收前完成。
+ *
+ * 创建日期：2026-05-14 | 作者：Cline
  */
 class NotificationActionReceiver : BroadcastReceiver() {
 
@@ -56,6 +58,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
      *
      * 将通知从固定状态变为非固定，允许用户滑动删除。
      * 同时更新数据库中的活跃状态。
+     *
+     * 修复（2026-08-16 | B7）：goAsync() 延长 Receiver 生命周期，
+     * 确保数据库更新与通知取消在进程被回收前完成。
      */
     private fun handleUnpin(context: Context, intent: Intent) {
         val notificationId = intent.getIntExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, -1)
@@ -63,16 +68,22 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         if (notificationId == -1) return
 
+        // goAsync 延长 Receiver 生命周期，确保异步操作完成（B7）
+        val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
-            val repository = NotificationRepository.getInstance(context)
-            val entity = repository.getById(notificationId) ?: return@launch
+            try {
+                val repository = NotificationRepository.getInstance(context)
+                val entity = repository.getById(notificationId) ?: return@launch
 
-            // 更新数据库：标记为非活跃
-            repository.deactivateById(notificationId)
+                // 更新数据库：标记为非活跃
+                repository.deactivateById(notificationId)
 
-            // 取消通知栏显示
-            if (notificationBarId != -1) {
-                NotificationHelper.cancelNotification(context, notificationBarId)
+                // 取消通知栏显示
+                if (notificationBarId != -1) {
+                    NotificationHelper.cancelNotification(context, notificationBarId)
+                }
+            } finally {
+                pendingResult.finish()
             }
         }
     }

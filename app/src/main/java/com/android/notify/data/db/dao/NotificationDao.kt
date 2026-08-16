@@ -111,6 +111,19 @@ interface NotificationDao {
     suspend fun deactivateById(id: Int)
 
     /**
+     * 更新定时触发时间
+     *
+     * 重复通知触发后回写下次触发时间，作为下次周期计算的基准，
+     * 避免以系统当前时间为基准导致的累积漂移。
+     * 修复（2026-08-16 10:40 | B6）
+     *
+     * @param id 数据库主键ID
+     * @param scheduledAt 下一次触发时间戳（毫秒）
+     */
+    @Query("UPDATE notifications SET scheduledAt = :scheduledAt WHERE id = :id")
+    suspend fun updateScheduledAt(id: Int, scheduledAt: Long)
+
+    /**
      * 更新通知内容（编辑功能使用）
      *
      * @param id 数据库主键ID
@@ -127,4 +140,16 @@ interface NotificationDao {
      */
     @Query("SELECT COUNT(*) FROM notifications")
     suspend fun getCount(): Int
+
+    /**
+     * 判断通知栏ID是否已被占用
+     *
+     * 用于生成通知栏ID时的唯一性校验，避免ID冲突导致通知互相覆盖。
+     * 优化（2026-08-16 10:45 | P6）
+     *
+     * @param notificationId 通知栏ID
+     * @return true表示已存在
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM notifications WHERE notificationId = :notificationId)")
+    suspend fun existsByNotificationId(notificationId: Int): Boolean
 }

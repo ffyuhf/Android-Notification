@@ -112,6 +112,20 @@ class NotificationRepository private constructor(context: Context) {
     }
 
     /**
+     * 更新定时触发时间
+     *
+     * 重复通知触发后回写下次触发时间，作为下次周期计算基准，
+     * 避免以系统当前时间为基准导致的累积漂移。
+     * 修复（2026-08-16 10:40 | B6）
+     *
+     * @param id 数据库主键ID
+     * @param scheduledAt 下一次触发时间戳（毫秒）
+     */
+    suspend fun updateScheduledAt(id: Int, scheduledAt: Long) {
+        dao.updateScheduledAt(id, scheduledAt)
+    }
+
+    /**
      * 更新通知内容
      * 编辑功能使用
      *
@@ -131,6 +145,17 @@ class NotificationRepository private constructor(context: Context) {
      */
     suspend fun getCount(): Int {
         return dao.getCount()
+    }
+
+    /**
+     * 判断通知栏ID是否已被占用
+     * 生成通知栏ID时的唯一性校验（优化 2026-08-16 | P6）
+     *
+     * @param notificationId 通知栏ID
+     * @return true表示已存在
+     */
+    suspend fun existsByNotificationId(notificationId: Int): Boolean {
+        return dao.existsByNotificationId(notificationId)
     }
 
     companion object {

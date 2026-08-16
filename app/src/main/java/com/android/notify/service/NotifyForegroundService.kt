@@ -5,8 +5,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.android.notify.MainActivity
 import com.android.notify.NotifyApp
 import com.android.notify.R
@@ -14,7 +17,10 @@ import com.android.notify.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -22,11 +28,18 @@ import kotlinx.coroutines.launch
  *
  * 职责：
  * 1. 保持应用进程存活，防止通知被系统回收
- * 2. 定期巡检通知栏，恢复被意外删除的固定通知
+ * 2. 定期巡检通知栏，恢复被意外删除的固定通知（差异恢复）
  * 3. 开机自启后自动恢复所有固定通知
  *
- * 创建日期：2026-05-14
- * 作者：Cline
+ * 修复（2026-08-16）：
+ * - B2 服务无法停止：原 onDestroy 无条件重启，ACTION_STOP 后服务死循环重启；
+ *   现引入用户停止标志，仅系统回收场景尝试自愈，且 Android 12+ 后台启动
+ *   受限时交由 START_STICKY 兜底重建
+ * - P1 巡检差异恢复：巡检周期仅重发通知栏中缺失的通知，不再全量重发
+ * - P3 onDestroy 取消协程作用域，修复泄漏；循环增加 isActive 退出条件
+ * - P8 targetSdk 34+ 通过 ServiceCompat 显式指定前台服务类型
+ *
+ * 创建日期：2026-05-14 | 作者：Cline
  */
 class NotifyForegroundService : Service() {
 
@@ -41,11 +54,23 @@ class NotifyForegroundService : Service() {
         const val ACTION_STOP = "com.android.notify.ACTION_STOP_SERVICE"
 
         /**
+         * 用户主动停止标志（B2）
+         *
+         * true 表示停止由用户主动发起，onDestroy 不自动重启服务，
+         * 避免"停止即重启"死循环与 Android 12+ 后台启动前台服务异常。
+         * 显式调用 start() 时复位，保证再次发送通知后服务可正常恢复。
+         */
+        @Volatile
+        private var isUserStopped = false
+
+        /**
          * 启动前台服务
          *
          * @param context 上下文
          */
         fun start(context: Context) {
+            // 显式启动视为需要服务运行，复位用户停止标志（B2）
+            isUserStopped = false
             val intent = Intent(context, NotifyForegroundService::class.java).apply {
                 action = ACTION_START
             }
@@ -58,6 +83,8 @@ class NotifyForegroundService : Service() {
          * @param context 上下文
          */
         fun stop(context: Context) {
+            // 标记用户主动停止，阻止 onDestroy 自动重启（B2）
+            isUserStopped = true
             val intent = Intent(context, NotifyForegroundService::class.java).apply {
                 action = ACTION_STOP
             }
@@ -76,12 +103,8 @@ class NotifyForegroundService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            ACTION_START -> {
-                startForeground()
-                restoreAndStartCheckLoop()
-            }
             else -> {
-                startForeground()
+                startForegroundWithServiceType()
                 restoreAndStartCheckLoop()
             }
         }
@@ -92,10 +115,22 @@ class NotifyForegroundService : Service() {
      * 启动前台通知
      *
      * 前台服务必须显示一个通知。
+     * 优化（2026-08-16 | P8）：targetSdk 34+ 需显式指定前台服务类型，
+     * 使用 ServiceCompat 统一处理版本分支，避免类型缺失异常。
      */
-    private fun startForeground() {
+    private fun startForegroundWithServiceType() {
         val notification = createServiceNotification()
-        startForeground(NotifyApp.FOREGROUND_SERVICE_NOTIFICATION_ID, notification)
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(
+            this,
+            NotifyApp.FOREGROUND_SERVICE_NOTIFICATION_ID,
+            notification,
+            serviceType
+        )
     }
 
     /**
@@ -125,8 +160,8 @@ class NotifyForegroundService : Service() {
      */
     private fun restoreAndStartCheckLoop() {
         serviceScope.launch {
-            // 启动时恢复所有固定通知
-            NotificationHelper.restoreAllPinnedNotifications(this@NotifyForegroundService)
+            // 启动时全量恢复所有固定通知（服务启动/开机自启场景）
+            NotificationHelper.restorePinnedNotifications(this@NotifyForegroundService, restoreAll = true)
             // 启动定期巡检
             startCheckLoop()
         }
@@ -135,14 +170,15 @@ class NotifyForegroundService : Service() {
     /**
      * 定期巡检通知栏状态
      *
-     * 对比数据库记录与通知栏实际状态，
-     * 恢复被意外删除的固定通知（第三层防护）。
+     * 优化（2026-08-16 | P1）：差异恢复。原实现每周期全量重发所有固定通知，
+     * 造成重复提醒与耗电；现对比数据库记录与通知栏实际状态，仅恢复缺失的通知。
+     * 优化（2026-08-16 | P3）：循环体感知协程取消，作用域取消时立即退出。
      */
     private suspend fun startCheckLoop() {
-        while (true) {
+        while (currentCoroutineContext().isActive) {
             delay(CHECK_INTERVAL_MS)
             try {
-                NotificationHelper.restoreAllPinnedNotifications(this)
+                NotificationHelper.restorePinnedNotifications(this, restoreAll = false)
             } catch (_: Exception) {
                 // 巡检异常不中断循环
             }
@@ -151,7 +187,17 @@ class NotifyForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 服务被销毁时尝试重启
-        start(this)
+        // 取消巡检协程，避免作用域泄漏（P3）
+        serviceScope.cancel()
+        // 仅系统回收场景尝试自愈重启（B2）：
+        // Android 12+ 系统杀死后从后台启动前台服务可能受限，
+        // 失败时交由 START_STICKY 由系统择机重建
+        if (!isUserStopped) {
+            try {
+                start(this)
+            } catch (_: Exception) {
+                // 后台启动前台服务受限，等待系统 START_STICKY 重建
+            }
+        }
     }
 }

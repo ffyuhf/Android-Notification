@@ -66,15 +66,13 @@
 
         <!-- ===== Receiver 声明 ===== -->
 
-        <!-- 开机自启接收器 -->
+        <!-- 开机自启接收器（仅解锁后启动：锁屏直启阶段无法访问 CE 存储，修复 2026-08-16 | P7） -->
         <receiver
             android:name=".receiver.BootReceiver"
-            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>

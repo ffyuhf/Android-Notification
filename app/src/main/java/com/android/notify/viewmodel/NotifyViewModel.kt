@@ -3,6 +3,7 @@ package com.android.notify.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.notify.R
 import com.android.notify.data.datastore.SettingsDataStore
 import com.android.notify.data.db.entity.NotificationEntity
 import com.android.notify.data.repository.NotificationRepository
@@ -74,9 +75,12 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
 
     // ===== UI 状态 =====
 
-    /** 操作结果消息（用于Toast） */
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    /**
+     * 操作结果消息（字符串资源ID，用于Toast）
+     * 优化（2026-08-16 | B5）：值改为资源ID，由UI层统一消费显示，原key字符串无消费者
+     */
+    private val _message = MutableStateFlow<Int?>(null)
+    val message: StateFlow<Int?> = _message.asStateFlow()
 
     /**
      * 立即发送通知
@@ -107,13 +111,13 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             val rowId = repository.insertNotification(entity)
             val savedEntity = entity.copy(id = rowId.toInt())
 
-            // 发送到通知栏（使用包含真实ID的entity）
-            NotificationHelper.sendNotification(context, savedEntity, settings)
+            // 发送到通知栏（使用包含真实ID的entity，复用单次设置快照）
+            NotificationHelper.sendNotification(context, savedEntity, settings.getSnapshot())
 
             // 启动前台保活服务
             NotifyForegroundService.start(context)
 
-            _message.value = "toast_notification_sent"
+            _message.value = R.string.toast_notification_sent
         }
     }
 
@@ -151,13 +155,16 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 isAntiDeleteEnabled = true
             )
 
-            // 保存到数据库
-            repository.insertNotification(entity)
+            // 保存到数据库并回填真实ID（修复 2026-08-16 | B1）：
+            // 原实现调度闹钟时使用未回填的 entity（id=0），
+            // 触发时按 dbId=0 查库为空直接返回，定时通知永不发出
+            val rowId = repository.insertNotification(entity)
+            val savedEntity = entity.copy(id = rowId.toInt())
 
-            // 设置定时闹钟
-            AlarmScheduler.schedule(context, entity)
+            // 设置定时闹钟（使用包含真实ID的entity）
+            AlarmScheduler.schedule(context, savedEntity)
 
-            _message.value = "toast_notification_scheduled"
+            _message.value = R.string.toast_notification_scheduled
         }
     }
 
@@ -184,9 +191,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             val rowId = repository.insertNotification(newEntity)
             val savedEntity = newEntity.copy(id = rowId.toInt())
 
-            NotificationHelper.sendNotification(context, savedEntity, settings)
+            NotificationHelper.sendNotification(context, savedEntity, settings.getSnapshot())
 
-            _message.value = "toast_notification_sent"
+            _message.value = R.string.toast_notification_sent
         }
     }
 
@@ -237,8 +244,21 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             // 重新发送更新后的通知
             val entity = repository.getById(id) ?: return@launch
             val updatedEntity = entity.copy(title = title, content = content)
-            NotificationHelper.sendNotification(context, updatedEntity, settings)
+            NotificationHelper.sendNotification(context, updatedEntity, settings.getSnapshot())
         }
+    }
+
+    /**
+     * 按ID加载通知记录
+     *
+     * 供编辑页读取通知数据（优化 2026-08-16 | U5）：
+     * 原编辑页直接访问 Repository 越过 ViewModel，违反 MVVM 分层。
+     *
+     * @param id 数据库ID
+     * @return 通知实体，不存在返回null
+     */
+    suspend fun loadNotification(id: Int): NotificationEntity? {
+        return repository.getById(id)
     }
 
     // ===== 设置操作 =====

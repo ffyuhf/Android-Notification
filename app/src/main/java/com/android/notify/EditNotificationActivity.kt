@@ -2,8 +2,8 @@ package com.android.notify
 
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,10 +43,14 @@ import com.android.notify.viewmodel.NotifyViewModel
  * 从通知栏的编辑按钮启动，允许用户修改通知内容。
  * 保存后通知栏实时更新。
  *
+ * 优化（2026-08-16）：
+ * - B4 改继承 AppCompatActivity，支持 per-app 语言切换
+ * - U5 通知数据改经 ViewModel 加载（原直访 Repository 违反 MVVM 分层）
+ *
  * 创建日期：2026-05-14
  * 作者：Cline
  */
-class EditNotificationActivity : ComponentActivity() {
+class EditNotificationActivity : AppCompatActivity() {
 
     private lateinit var viewModel: NotifyViewModel
 
@@ -86,12 +90,10 @@ private fun EditNotificationContent(
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
 
-    // 首次加载时读取通知数据（使用 LaunchedEffect 避免在组合期间创建协程）
+    // 首次加载时经 ViewModel 读取通知数据（U5：避免直访 Repository 违反分层）
     LaunchedEffect(notificationId) {
         if (notificationId != -1) {
-            val repo = com.android.notify.data.repository.NotificationRepository.getInstance(context)
-            val entity = repo.getById(notificationId)
-            entity?.let {
+            viewModel.loadNotification(notificationId)?.let {
                 title = it.title ?: ""
                 content = it.content
             }

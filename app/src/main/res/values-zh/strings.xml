@@ -73,6 +73,20 @@
 
     <!-- ===== 权限提示 ===== -->
     <string name="permission_notification_denied">通知权限被拒绝，请在设置中开启。</string>
+    <string name="permission_exact_alarm_needed">定时通知需要精确闹钟权限，正在前往设置开启。</string>
+
+    <!-- ===== 权限设置入口（2026-08-16 | U1/U2） ===== -->
+    <string name="settings_permissions">权限管理</string>
+    <string name="settings_notification_permission">通知权限</string>
+    <string name="settings_notification_permission_desc">显示通知所必需</string>
+    <string name="settings_exact_alarm_permission">精确闹钟权限</string>
+    <string name="settings_exact_alarm_permission_desc">定时通知准时触发所必需</string>
+    <string name="settings_grant_permission">去授权</string>
+    <string name="status_granted">已授权</string>
+    <string name="status_not_granted">未授权</string>
+
+    <!-- ===== 定时校验（2026-08-16 | U4） ===== -->
+    <string name="error_schedule_past_time">定时时间必须晚于当前时间</string>
 
     <!-- ===== Toast 提示 ===== -->
     <string name="toast_copied">已复制到剪贴板</string>

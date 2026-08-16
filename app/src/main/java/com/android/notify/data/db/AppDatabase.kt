@@ -48,8 +48,10 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                    // 主线程查询禁止（强制在IO线程执行）
-                    .allowMainThreadQueries()
+                    // 修复（2026-08-16 | P4）：移除 allowMainThreadQueries。
+                    // 该调用与注释意图相反——它允许主线程查询而非禁止，
+                    // 主线程访问数据库会造成 UI 卡顿甚至 ANR。
+                    // 当前全部 DAO 访问均在协程 Dispatchers.IO 中执行。
                     // 数据库损坏时自动重建
                     .fallbackToDestructiveMigration()
                     .build()

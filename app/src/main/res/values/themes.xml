@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 应用主题（XML层仅使用基础透明主题，Material3由Compose层处理） -->
+<!-- 应用主题（XML层仅使用基础主题，Material3由Compose层处理） -->
+<!-- 修改（2026-08-16 | B4）：切换为 AppCompat 主题以支持 AppCompatActivity 与 per-app 语言切换 -->
 <!-- 创建日期：2026-05-14 | 作者：Cline -->
 <resources>
-    <style name="Theme.AndroidNotify" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.AndroidNotify" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>

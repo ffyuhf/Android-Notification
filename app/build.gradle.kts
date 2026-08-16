@@ -58,6 +58,12 @@ android {
     }
 }
 
+// Room schema 导出目录（优化 2026-08-16 | P9）：
+// exportSchema = true 时必须配置导出位置，schema 纳入版本管理用于迁移校验
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Compose BOM - 统一管理 Compose 版本
     val composeBom = platform(libs.compose.bom)
@@ -75,6 +81,8 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.core.ktx)
+    // AppCompat：per-app 语言切换（AppCompatDelegate.setApplicationLocales）（新增 2026-08-16 | B4）
+    implementation(libs.appcompat)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.lifecycle.runtime.compose)

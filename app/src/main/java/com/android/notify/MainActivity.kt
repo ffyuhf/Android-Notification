@@ -1,14 +1,13 @@
 package com.android.notify
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -21,13 +20,15 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
@@ -43,17 +44,22 @@ import com.android.notify.viewmodel.NotifyViewModel
  *
  * 职责：
  * 1. Compose 入口，承载底部导航和页面切换
- * 2. 动态权限请求（通知、闹钟、开机启动）
+ * 2. 通知权限动态请求（Android 13+）
  * 3. 启动前台保活服务
  *
- * 创建日期：2026-05-14
- * 作者：Cline
+ * 优化（2026-08-16）：
+ * - B4 改继承 AppCompatActivity，支持 per-app 语言切换（AppCompatDelegate）
+ * - B5 消费 viewModel.message 显示操作结果 Toast（原状态无消费者永不显示）
+ * - U1 移除启动时精确闹钟权限强跳（改为定时发送时按需引导，见 HomeScreen）
+ * - U3 底部导航选中状态改 rememberSaveable，切页重建后保留
+ *
+ * 创建日期：2026-05-14 | 作者：Cline
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var viewModel: NotifyViewModel
 
-    /** 通知权限请求 */
+    /** 通知权限请求（dangerous 权限，运行时弹窗） */
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -64,18 +70,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 精确闹钟权限请求（Android 12+） */
-    private val exactAlarmPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        // 精确闹钟权限结果回调
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         viewModel = ViewModelProvider(this)[NotifyViewModel::class.java]
-        checkAndRequestPermissions()
+        checkAndRequestNotificationPermission()
 
         setContent {
             val darkMode by viewModel.darkMode.collectAsState()
@@ -86,10 +85,14 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 检查并请求必要权限
+     * 检查并请求通知权限（Android 13+）
+     *
+     * 优化（2026-08-16 | U1）：精确闹钟权限引导从启动流程移除。
+     * SCHEDULE_EXACT_ALARM 属特殊访问权限（跳设置页授权），
+     * 非运行时弹窗权限，启动即强跳设置页打扰用户；
+     * 现改为定时发送确认时按需引导（HomeScreen）并在设置页提供手动入口。
      */
-    private fun checkAndRequestPermissions() {
-        // 通知权限（Android 13+ 必需）
+    private fun checkAndRequestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this, Manifest.permission.POST_NOTIFICATIONS
@@ -102,19 +105,6 @@ class MainActivity : ComponentActivity() {
         } else {
             NotifyForegroundService.start(this)
         }
-
-        // 精确闹钟权限（Android 12+ 可选）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(android.app.AlarmManager::class.java)
-            if (!alarmManager.canScheduleExactAlarms()) {
-                val intent = Intent(
-                    android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
-                ).apply {
-                    data = android.net.Uri.parse("package:$packageName")
-                }
-                exactAlarmPermissionLauncher.launch(intent)
-            }
-        }
     }
 }
 
@@ -122,13 +112,24 @@ class MainActivity : ComponentActivity() {
  * 主内容 Composable
  *
  * 底部导航 + 页面切换。
- * 修复：使用标准 remember + mutableIntStateOf，移除自定义 remember 遮蔽。
- * 修复：页面渲染使用正确的 Compose 组合方式，避免 .let 导致的闪退。
+ * 优化（2026-08-16）：
+ * - B5 收集 message 状态显示操作结果 Toast 后清除
+ * - U3 selectedItem 使用 rememberSaveable 保留选中页
  */
 @Composable
 private fun MainContent(viewModel: NotifyViewModel) {
-    // 使用 mutableIntStateOf 避免不必要的重组
-    var selectedItem by remember { mutableIntStateOf(0) }
+    // rememberSaveable 避免切页/重建后丢失选中Tab（U3）
+    var selectedItem by rememberSaveable { mutableIntStateOf(0) }
+
+    // 消费操作结果消息显示Toast（B5：原 message 状态无消费者，Toast 永不显示）
+    val context = LocalContext.current
+    val message by viewModel.message.collectAsState()
+    LaunchedEffect(message) {
+        message?.let { resId ->
+            Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+            viewModel.clearMessage()
+        }
+    }
 
     val items = listOf(
         NavigationItem(stringResource(R.string.tab_home), Icons.Default.Home),
@@ -150,7 +151,6 @@ private fun MainContent(viewModel: NotifyViewModel) {
             }
         }
     ) { paddingValues ->
-        // 正确的 Compose 页面渲染，避免 .let 导致的组合问题
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedItem) {
                 0 -> HomeScreen(viewModel)

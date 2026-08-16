@@ -73,6 +73,20 @@
 
     <!-- ===== 权限提示 ===== -->
     <string name="permission_notification_denied">Notification permission denied. Please enable it in Settings.</string>
+    <string name="permission_exact_alarm_needed">Exact alarm permission is required for scheduled notifications. Granting it in Settings.</string>
+
+    <!-- ===== 权限设置入口（2026-08-16 | U1/U2） ===== -->
+    <string name="settings_permissions">Permissions</string>
+    <string name="settings_notification_permission">Notification Permission</string>
+    <string name="settings_notification_permission_desc">Required to display notifications</string>
+    <string name="settings_exact_alarm_permission">Exact Alarm Permission</string>
+    <string name="settings_exact_alarm_permission_desc">Required to trigger scheduled notifications on time</string>
+    <string name="settings_grant_permission">Grant</string>
+    <string name="status_granted">Granted</string>
+    <string name="status_not_granted">Not granted</string>
+
+    <!-- ===== 定时校验（2026-08-16 | U4） ===== -->
+    <string name="error_schedule_past_time">Scheduled time must be in the future</string>
 
     <!-- ===== Toast 提示 ===== -->
     <string name="toast_copied">Copied to clipboard</string>
