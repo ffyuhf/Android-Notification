@@ -96,7 +96,7 @@ object NotificationHelper {
         entity: NotificationEntity,
         settingsSnapshot: NotificationSettingsSnapshot? = null,
         soundEnabled: Boolean = true
-    ) {
+    ): Boolean {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // 读取设置：优先使用调用方传入的快照，避免重复 DataStore IO（P2）
