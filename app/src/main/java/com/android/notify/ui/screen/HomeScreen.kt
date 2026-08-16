@@ -11,7 +11,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -51,13 +49,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.notify.R
-import com.android.notify.util.AsyncBitmap
+import com.android.notify.ui.component.AdaptiveImage
 import com.android.notify.util.ImageStorageHelper
 import com.android.notify.viewmodel.NotifyViewModel
 import kotlinx.coroutines.Dispatchers
@@ -201,20 +197,15 @@ fun HomeScreen(viewModel: NotifyViewModel) {
         // 图片选择区域（新增 2026-08-16 | 图片通知）
         if (imagePath != null) {
             // 已选图片：预览缩略图 + 移除按钮
-            // 修正（2026-08-16 15:39 | 图片通知闪退修复）：解码改异步，
-            // 原主线程 remember 同步解码大图时叠加发送链路解码易 OOM 闪退
-            val previewBitmap by AsyncBitmap.rememberSampledBitmap(imagePath, 800)
-            previewBitmap?.let { bitmap ->
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = stringResource(R.string.action_add_image),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
+            // 修正（2026-08-16 18:35 | 图片显示自适应修复）：固定高度 + Crop 裁剪
+            // 会截短图片，改按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏）
+            AdaptiveImage(
+                path = imagePath,
+                maxHeight = 320.dp,
+                cornerRadius = 12.dp,
+                contentDescription = stringResource(R.string.action_add_image),
+                decodeMaxDimension = 800
+            )
             TextButton(
                 onClick = removeImage,
                 modifier = Modifier.align(Alignment.End)

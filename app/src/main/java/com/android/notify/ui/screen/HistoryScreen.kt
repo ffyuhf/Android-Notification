@@ -12,7 +12,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,11 +26,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Clear
@@ -68,15 +66,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.notify.EditNotificationActivity
 import com.android.notify.R
 import com.android.notify.data.db.entity.NotificationEntity
-import com.android.notify.util.AsyncBitmap
+import com.android.notify.ui.component.AdaptiveImage
 import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
 import java.text.SimpleDateFormat
@@ -384,17 +380,21 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
             // 导致左上大片空白、首条记录排右上、整体非Z字形。
             // 改用 contentPadding 后网格恢复 1 2 / 3 4 行优先 Z 字形排布。
             isTwoColumn -> {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                // 修正（2026-08-16 18:35 | 图片显示自适应修复）：等高网格换瀑布流，
+                // 消除「同行无图卡片被有图卡片撑高留白」的空间浪费——
+                // LazyVerticalGrid 同行强制等高，LazyVerticalStaggeredGrid 各列独立测量高度，
+                // 无图卡片紧凑自适应，图片完整显示后卡片高度差异化收益更大
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(2),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalItemSpacing = 8.dp,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    gridItems(notifications, key = { it.id }) { notification ->
+                    staggeredItems(notifications, key = { it.id }) { notification ->
                         CompactNotificationCard(
                             notification = notification,
                             selectionMode = selectionMode,
@@ -616,23 +616,18 @@ private fun NotificationHistoryItem(
                     )
                     // 图片缩略图（图片通知，新增 2026-08-16；
                     // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步，
-                    // 原主线程逐项同步解码在多图列表场景线性放大内存与卡顿）
+                    // 原主线程逐项同步解码在多图列表场景线性放大内存与卡顿；
+                    // 修正 2026-08-16 18:35 | 图片显示自适应修复：固定高度 + Crop
+                    // 截短图片，改按图片宽高比自适应高度完整显示）
                     if (!notification.imagePath.isNullOrBlank()) {
-                        val thumbBitmap by AsyncBitmap.rememberSampledBitmap(
-                            notification.imagePath, 400
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AdaptiveImage(
+                            path = notification.imagePath,
+                            maxHeight = 200.dp,
+                            cornerRadius = 8.dp,
+                            contentDescription = stringResource(R.string.action_add_image),
+                            decodeMaxDimension = 400
                         )
-                        thumbBitmap?.let { bitmap ->
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Image(
-                                bitmap = bitmap,
-                                contentDescription = stringResource(R.string.action_add_image),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(90.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
                     }
                 }
             }
@@ -766,23 +761,18 @@ private fun CompactNotificationCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     // 图片缩略图（图片通知，新增 2026-08-16；
-                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步）
+                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步；
+                    // 修正 2026-08-16 18:35 | 图片显示自适应修复：固定高度 + Crop
+                    // 截短图片，改按图片宽高比自适应高度完整显示）
                     if (!notification.imagePath.isNullOrBlank()) {
-                        val thumbBitmap by AsyncBitmap.rememberSampledBitmap(
-                            notification.imagePath, 300
+                        Spacer(modifier = Modifier.height(4.dp))
+                        AdaptiveImage(
+                            path = notification.imagePath,
+                            maxHeight = 160.dp,
+                            cornerRadius = 6.dp,
+                            contentDescription = stringResource(R.string.action_add_image),
+                            decodeMaxDimension = 300
                         )
-                        thumbBitmap?.let { bitmap ->
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Image(
-                                bitmap = bitmap,
-                                contentDescription = stringResource(R.string.action_add_image),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(60.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
                     }
                 }
             }

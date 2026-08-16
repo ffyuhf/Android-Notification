@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -40,14 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import com.android.notify.ui.component.AdaptiveImage
 import com.android.notify.ui.theme.NotifyAppTheme
-import com.android.notify.util.AsyncBitmap
 import com.android.notify.util.ImageStorageHelper
 import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
@@ -185,20 +181,15 @@ private fun EditNotificationContent(
             // 图片编辑区域（新增 2026-08-16 | 图片通知）
             if (imagePath != null) {
                 // 当前图片预览
-                // 修正（2026-08-16 15:39 | 图片通知闪退修复）：解码改异步，
-                // 原主线程 remember 同步解码为图片链路 OOM 隐患之一
-                val previewBitmap by AsyncBitmap.rememberSampledBitmap(imagePath, 800)
-                previewBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = stringResource(R.string.action_add_image),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(160.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
+                // 修正（2026-08-16 18:35 | 图片显示自适应修复）：固定高度 + Crop 裁剪
+                // 会截短图片，改按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏）
+                AdaptiveImage(
+                    path = imagePath,
+                    maxHeight = 320.dp,
+                    cornerRadius = 12.dp,
+                    contentDescription = stringResource(R.string.action_add_image),
+                    decodeMaxDimension = 800
+                )
                 // 更换 / 移除图片
                 Row(
                     modifier = Modifier.fillMaxWidth(),
