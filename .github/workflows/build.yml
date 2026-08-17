@@ -92,15 +92,15 @@ jobs:
       - name: Build Release APK
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || env.IS_TAG == 'true'
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PATH: ${{ env.IS_TAG == 'true' && format('{0}/release.keystore', github.workspace) || '' }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
-      # 10. 上传 Release APK 到 Artifacts
+      # 10. 上传 Release APK 到 Artifacts（仅分支构建；tag 构建直接进 Release）
       - name: Upload Release APK
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && env.IS_TAG != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: app-release
