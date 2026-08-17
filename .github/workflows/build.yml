@@ -1,6 +1,6 @@
 # GitHub Actions 构建工作流
-# 触发条件：push 到 main 分支、Pull Request、手动触发
-# 功能：编译 Android APK（Debug/Release）
+# 触发条件：push 到 main 分支、Pull Request、手动触发、推送 v* 标签
+# 功能：编译 Android APK；tag 触发时自动签名并发布到 GitHub Release
 # 创建日期：2026-05-14 | 作者：Cline
 
 name: Android CI Build
@@ -8,6 +8,7 @@ name: Android CI Build
 on:
   push:
     branches: [ main, master, develop ]
+    tags: [ 'v*' ]        # 推送 v 开头的 tag 时触发发版
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -17,25 +18,31 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# 标记当前是否为 tag 触发
+env:
+  IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write      # 创建 Release 需要写权限
 
     steps:
       # 1. 检出代码
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # 2. 设置 JDK 17（Android Gradle Plugin 8.x 要求）
+      # 2. 设置 JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. 缓存 Gradle 依赖（加速后续构建）
+      # 3. 缓存 Gradle 依赖
       - name: Cache Gradle packages
         uses: actions/cache@v5
         with:
@@ -49,24 +56,49 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 5. 构建 Debug APK
+      # 5. 仅 tag 触发：把 tag 版本号写入 versionName/versionCode
+      #    v1.2.3 -> versionName "1.2.3"，versionCode 取运行序号（单调递增）
+      - name: Inject version from tag
+        if: env.IS_TAG == 'true'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CODE="${{ github.run_number }}"
+          for f in app/build.gradle app/build.gradle.kts; do
+            [ -f "$f" ] || continue
+            sed -i -E "s/versionCode = [0-9]+/versionCode = ${CODE}/; s/versionCode [0-9]+/versionCode ${CODE}/" "$f"
+            sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"${TAG}\"/; s/versionName \"[^\"]+\"/versionName \"${TAG}\"/" "$f"
+          done
+
+      # 6. 仅 tag 触发：解出签名密钥
+      - name: Decode signing keystore
+        if: env.IS_TAG == 'true'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > ${{ github.workspace }}/release.keystore
+
+      # 7. 构建 Debug APK（tag 触发时跳过）
       - name: Build Debug APK
+        if: env.IS_TAG != 'true'
         run: ./gradlew assembleDebug --stacktrace
 
-      # 6. 上传 Debug APK 到 Artifacts
+      # 8. 上传 Debug APK 到 Artifacts
       - name: Upload Debug APK
+        if: env.IS_TAG != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
-      # 7. 构建 Release APK（仅 main/master 分支）
+      # 9. 构建 Release APK（main/master 或 tag 触发）
       - name: Build Release APK
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || env.IS_TAG == 'true'
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
-      # 8. 上传 Release APK 到 Artifacts
+      # 10. 上传 Release APK 到 Artifacts
       - name: Upload Release APK
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v7
@@ -74,6 +106,15 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
           retention-days: 90
+
+      # 11. 仅 tag 触发：把 APK 挂到 GitHub Release
+      - name: Publish APK to GitHub Release
+        if: env.IS_TAG == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
 
   lint:
     name: Lint Check
@@ -103,11 +144,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Android Lint 检查
       - name: Run Lint
         run: ./gradlew lintDebug --stacktrace
 
-      # 上传 Lint 报告
       - name: Upload Lint Report
         if: always()
         uses: actions/upload-artifact@v7
