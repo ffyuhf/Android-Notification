@@ -12,11 +12,11 @@ android {
     namespace = "com.android.notify"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
-    // 签名配置：CI 发版时从环境变量读取，文件不存在时自动跳过
+    // 签名配置：CI 发版时从环境变量读取，变量为空或文件不存在时自动跳过
     signingConfigs {
         create("release") {
             val ksPath = System.getenv("KEYSTORE_PATH")
-            if (ksPath != null && file(ksPath).exists()) {
+            if (!ksPath.isNullOrEmpty() && file(ksPath).exists()) {
                 storeFile = file(ksPath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
@@ -40,7 +40,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             val ksPath = System.getenv("KEYSTORE_PATH")
-            if (ksPath != null && file(ksPath).exists()) {
+            if (!ksPath.isNullOrEmpty() && file(ksPath).exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(
