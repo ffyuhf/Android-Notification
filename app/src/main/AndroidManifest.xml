@@ -18,9 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- ===== 可选权限 ===== -->
-    <!-- 精确闹钟权限（定时通知） -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- 使用精确闹钟（Android 13+ 替代权限） -->
+    <!-- 精确闹钟权限（定时通知）：Android 12 及以下走 SCHEDULE_EXACT_ALARM（运行时引导授权），
+         Android 13+ 统一走 USE_EXACT_ALARM（本应用定时提醒为核心闹钟型用途，安装即授予）。
+         修正（2026-08-18 16:42 | 动画历史块权限修复）：对齐 Android 权限技能模板 4.1 写法，
+         SCHEDULE 声明加 maxSdkVersion=32，避免在新版本上过度声明 -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application

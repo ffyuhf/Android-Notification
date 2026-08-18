@@ -4,11 +4,12 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -44,8 +45,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -102,6 +101,14 @@ import java.util.Locale
  *   状态由 ●/○/⏰ 文本符号改为 AssistChip（已固定 / 已定时+时间，普通态不占位）
  * - P9 空状态增加图标引导
  * - P5 保留既有搜索展开/收起过渡（F7/F9 成果），仅统一顶栏配色
+ *
+ * 动画历史块权限修复（2026-08-18 16:46）：
+ * - A2 顶栏多选切换改淡入+垂直轻移对称补间（原横滑进出节奏不一致）
+ * - A3 搜索框恒定宽度+位移淡入（原 expandHorizontally 展开挤压文字）
+ * - A4 列表项 Modifier.animateItem 增删/置顶位移动画（依赖 items key）
+ * - B1-B3 卡片元数据区重构：状态 AssistChip 改行内图标+文本指示
+ *   （HistoryStatusIndicator），单列一行同水平面 36dp 按钮，两列两行紧凑
+ *   + formatShortDateTime 短时间（修复窄卡时间显示不全/指示换行错位）
  *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
@@ -173,14 +180,20 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
 
     Scaffold(
         topBar = {
-            // ===== 双态顶栏：多选态与普通/搜索态整体切换（淡入+滑动过渡）；
-            // 普通↔搜索 态合并为单 TopAppBar，搜索框从按钮位置展开/收缩（F7/F9）=====
+            // ===== 双态顶栏：多选态与普通/搜索态整体切换（淡入+轻微垂直位移）；
+            // 普通↔搜索 态合并为单 TopAppBar，搜索框从按钮位置平移过渡（F7/F9 语义保持）。
+            // 修正（2026-08-18 16:46 | 动画历史块权限修复 A2）：原横滑进出节奏
+            // 不一致（进入横滑 200ms / 退出仅淡出 150ms）观感突兀，
+            // 改对称补间：新栏自下方轻移淡入、旧栏向上轻移淡出（各 200/180ms）=====
             AnimatedContent(
                 targetState = if (selectionMode) TopBarState.MULTI_SELECT else TopBarState.CONTENT,
                 transitionSpec = {
                     (fadeIn(animationSpec = tween(200)) +
-                        slideInHorizontally(animationSpec = tween(200)) { it / 8 })
-                        .togetherWith(fadeOut(animationSpec = tween(150)))
+                        slideInVertically(animationSpec = tween(200)) { it / 10 })
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(180)) +
+                                slideOutVertically(animationSpec = tween(180)) { -it / 10 }
+                        )
                 },
                 label = "HistoryTopBar"
             ) { state ->
@@ -277,18 +290,17 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                         TopAppBar(
                             title = {
                                 Box(modifier = Modifier.fillMaxWidth()) {
-                                    // 搜索框（H3）：从按钮位置（Start）向右展开 + 淡入，
-                                    // 关闭时向按钮位置收缩 + 淡出
+                                    // 搜索框（H3）：宽度恒定（fillMaxWidth 不参与宽度动画），
+                                    // 自标题位（Start 侧）平移 + 淡入，关闭时反向收回。
+                                    // 修正（2026-08-18 16:46 | A3）：原 expandHorizontally
+                                    // 宽度展开过程持续挤压输入框内容（placeholder/已输入
+                                    // 文字水平压缩变形），改恒定宽度 + 位移淡入消除变形
                                     AnimatedVisibility(
                                         visible = isSearching,
-                                        enter = expandHorizontally(
-                                            expandFrom = Alignment.Start,
-                                            animationSpec = tween(220)
-                                        ) + fadeIn(animationSpec = tween(220)),
-                                        exit = shrinkHorizontally(
-                                            shrinkTowards = Alignment.Start,
-                                            animationSpec = tween(180)
-                                        ) + fadeOut(animationSpec = tween(180))
+                                        enter = fadeIn(animationSpec = tween(220)) +
+                                            slideInHorizontally(animationSpec = tween(220)) { -it / 8 },
+                                        exit = fadeOut(animationSpec = tween(180)) +
+                                            slideOutHorizontally(animationSpec = tween(180)) { -it / 8 }
                                     ) {
                                         OutlinedTextField(
                                             value = searchQuery,
@@ -401,7 +413,10 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
                             onDelete = { pendingSingleDelete = notification },
-                            onEdit = { launchEditPage(context, notification.id) }
+                            onEdit = { launchEditPage(context, notification.id) },
+                            // 列表项增删/置顶位移动画（2026-08-18 16:46 | A4）：
+                            // 依赖 items key 生效，消除记录增删时列表瞬间跳变
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -426,7 +441,10 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
                             onDelete = { pendingSingleDelete = notification },
-                            onEdit = { launchEditPage(context, notification.id) }
+                            onEdit = { launchEditPage(context, notification.id) },
+                            // 列表项增删/置顶位移动画（2026-08-18 16:46 | A4）：
+                            // 依赖 items key 生效，消除记录增删时列表瞬间跳变
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -537,65 +555,56 @@ private fun resolveItemStatus(notification: NotificationEntity): HistoryItemStat
 }
 
 /**
- * 历史卡片状态 AssistChip（MD3 重绘 P6）
+ * 历史卡片状态轻量指示（重构 2026-08-18 16:44 | 动画历史块权限修复 B3）
  *
- * 已固定：primaryContainer 底 + 图钉图标；
- * 已定时：surfaceContainerHighest 底 + 时钟图标 + 触发时间（MM-dd HH:mm 短格式）；
- * 普通态不渲染。
+ * 原 AssistChip 实现（MD3 重绘 P6）带边框/最小高度/固定内边距，在窄卡片中
+ * 不可压缩，导致换行错位、与操作按钮不在同一水平面、占用多余高度。
+ * 现改为行内「图标 + 文本」组合：恒单行（超宽省略）、高度由文字行高决定，
+ * 可与时间、操作按钮稳定同行排列；配色语义保持 P6 决策
+ * （已固定 primary 色 + 图钉；已定时 onSurfaceVariant + 时钟 + 触发时间；
+ * 普通态不渲染，减少视觉噪音）。
  *
  * @param status 记录显示状态
- * @param compact 是否紧凑模式（两列窄卡片使用更小内边距）
  */
 @Composable
-private fun HistoryStatusChip(status: HistoryItemStatus, compact: Boolean) {
+private fun HistoryStatusIndicator(status: HistoryItemStatus) {
     when (status) {
         HistoryItemStatus.Pinned -> {
-            AssistChip(
-                onClick = {},
-                enabled = true,
-                label = { Text(stringResource(R.string.status_pinned)) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.PushPin,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ),
-                border = null,
-                modifier = Modifier.height(if (compact) 24.dp else 28.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.PushPin,
+                    contentDescription = stringResource(R.string.status_pinned),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = stringResource(R.string.status_pinned),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         is HistoryItemStatus.Scheduled -> {
-            AssistChip(
-                onClick = {},
-                enabled = true,
-                label = {
-                    Text(
-                        formatScheduledChipTime(status.triggerAtMillis),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Schedule,
-                        contentDescription = stringResource(R.string.status_scheduled),
-                        modifier = Modifier.size(14.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    leadingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                border = null,
-                modifier = Modifier.height(if (compact) 24.dp else 28.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Schedule,
+                    contentDescription = stringResource(R.string.status_scheduled),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = formatShortDateTime(status.triggerAtMillis),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         HistoryItemStatus.Normal -> Unit
@@ -647,6 +656,7 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
  * @param onResend 重新发送回调
  * @param onDelete 删除回调
  * @param onEdit 编辑回调
+ * @param modifier 外部布局修饰（列表调用方传入 animateItem 实现增删位移动画）
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -658,10 +668,11 @@ private fun NotificationHistoryItem(
     onItemLongClick: () -> Unit,
     onResend: () -> Unit,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onItemClick,
@@ -722,52 +733,52 @@ private fun NotificationHistoryItem(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 底部元数据行：时间 + 状态 Chip ｜ 操作按钮（多选模式下隐藏避免误触）
+                // 底部元数据行（重构 2026-08-18 16:44 | B1）：时间 + 状态指示 + 弹性空隙 +
+                // 操作按钮全部同一水平面（CenterVertically），状态指示恒单行不再换行错位；
+                // 按钮统一 36dp 触摸尺寸（icon 18dp），消除 48dp 默认尺寸的额外占位
+                // （多选模式下隐藏按钮避免误触）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 时间与状态
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = formatHistoryTime(notification.createdAt),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        HistoryStatusChip(status = resolveItemStatus(notification), compact = false)
-                    }
+                    Text(
+                        text = formatHistoryTime(notification.createdAt),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    HistoryStatusIndicator(status = resolveItemStatus(notification))
+                    Spacer(modifier = Modifier.weight(1f))
 
                     if (!selectionMode) {
                         Row {
                             // 编辑（应用内编辑页：改标题+图片）
-                            IconButton(onClick = onEdit) {
+                            IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                                 Icon(
                                     Icons.Default.Edit,
                                     contentDescription = stringResource(R.string.action_edit),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             // 重新发送
-                            IconButton(onClick = onResend) {
+                            IconButton(onClick = onResend, modifier = Modifier.size(36.dp)) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Send,
                                     contentDescription = stringResource(R.string.btn_resend),
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             // 删除
-                            IconButton(onClick = onDelete) {
+                            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                                 Icon(
                                     Icons.Default.Delete,
                                     contentDescription = stringResource(R.string.btn_delete),
-                                    tint = MaterialTheme.colorScheme.error
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -792,6 +803,7 @@ private fun NotificationHistoryItem(
  * @param onResend 重新发送回调
  * @param onDelete 删除回调
  * @param onEdit 编辑回调
+ * @param modifier 外部布局修饰（列表调用方传入 animateItem 实现增删位移动画）
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -803,10 +815,11 @@ private fun CompactNotificationCard(
     onItemLongClick: () -> Unit,
     onResend: () -> Unit,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onItemClick,
@@ -865,53 +878,57 @@ private fun CompactNotificationCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // 底部：时间/状态 + 操作小图标（多选模式下隐藏避免误触）
+                // 底部元数据区（重构 2026-08-18 16:44 | B2）：两列窄卡改两行紧凑布局——
+                // 行1：时间短格式（去年份保证窄卡完整显示）+ 状态指示，恒单行；
+                // 行2：操作小按钮（28dp/icon 16dp）右对齐，与元数据各自水平对齐，
+                // 不再相互挤压换行（原时间+Chip 垂直堆叠与按钮错位、时间被省略）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = formatHistoryTime(notification.createdAt),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        HistoryStatusChip(status = resolveItemStatus(notification), compact = true)
-                    }
+                    Text(
+                        text = formatShortDateTime(notification.createdAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    HistoryStatusIndicator(status = resolveItemStatus(notification))
+                    Spacer(modifier = Modifier.weight(1f))
+                }
 
-                    if (!selectionMode) {
-                        Row {
-                            // 编辑
-                            IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = stringResource(R.string.action_edit),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            // 重新发送
-                            IconButton(onClick = onResend, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = stringResource(R.string.btn_resend),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            // 删除
-                            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.btn_delete),
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                if (!selectionMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        // 编辑
+                        IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.action_edit),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        // 重新发送
+                        IconButton(onClick = onResend, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.btn_resend),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        // 删除
+                        IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.btn_delete),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
@@ -931,11 +948,15 @@ private fun formatHistoryTime(timeMillis: Long): String {
 }
 
 /**
- * 格式化定时 Chip 触发时间（短格式，控制 Chip 宽度适配两列窄卡片）
+ * 格式化短日期时间（重构 2026-08-18 16:44 | B2/B3）
  *
- * @param timeMillis 定时触发时间戳
+ * 原 formatScheduledChipTime 仅服务定时状态 Chip 文案；Chip 去 AssistChip 化后，
+ * 该短格式同时用于两列窄卡片的创建时间显示（去年份适配窄卡宽度），
+ * 按实际用途重命名。
+ *
+ * @param timeMillis 时间戳
  * @return MM-dd HH:mm 格式文本
  */
-private fun formatScheduledChipTime(timeMillis: Long): String {
+private fun formatShortDateTime(timeMillis: Long): String {
     return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(timeMillis)
 }

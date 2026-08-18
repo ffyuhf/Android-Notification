@@ -1,13 +1,24 @@
 package com.android.notify
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.core.app.ActivityCompat
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
@@ -55,6 +66,10 @@ import com.android.notify.viewmodel.NotifyViewModel
  * - U1 移除启动时精确闹钟权限强跳（改为定时发送时按需引导，见 HomeScreen）
  * - U3 底部导航选中状态改 rememberSaveable，切页重建后保留
  * - F6 外层 Scaffold contentWindowInsets 清零，消除嵌套 Scaffold 状态栏 inset 双算
+ * - 页面切换过渡动画（2026-08-18 16:42 | 动画历史块权限修复 A1）：
+ *   when 直切改 AnimatedContent 淡入+轻微上滑，消除切 Tab 生硬直切
+ * - 通知权限回调三分支（2026-08-18 16:42 | 同上 C1）：对齐 Android 权限技能模板 4.8，
+ *   拒绝可再询问→展示用途说明后可重试；永久拒绝→提示并引导跳通知设置页
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -62,14 +77,33 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var viewModel: NotifyViewModel
 
-    /** 通知权限请求（dangerous 权限，运行时弹窗） */
+    /**
+     * 通知权限请求（dangerous 权限，运行时弹窗）
+     *
+     * 回调三分支（2026-08-18 16:42 | 对齐 Android 权限技能模板 4.8）：
+     * ① 授权 → 启动前台保活服务；
+     * ② 拒绝但可再询问（rationale 为 true）→ 展示权限用途说明，用户可重新申请；
+     * ③ 拒绝且永久拒绝（不再询问，系统不再弹窗）→ Toast 提示并引导跳应用通知设置页。
+     */
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            NotifyForegroundService.start(this)
-        } else {
-            Toast.makeText(this, R.string.permission_notification_denied, Toast.LENGTH_LONG).show()
+        when {
+            // 分支①：授权成功
+            granted -> NotifyForegroundService.start(this)
+            // 分支②：拒绝但允许再次询问 → 先说明用途再由用户决定是否重试
+            ActivityCompat.shouldShowRequestPermissionRationale(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) -> showNotificationPermissionRationale()
+            // 分支③：永久拒绝 → 系统不再弹窗，只能去系统设置手动开启
+            else -> {
+                Toast.makeText(
+                    this,
+                    R.string.permission_notification_permanently_denied,
+                    Toast.LENGTH_LONG
+                ).show()
+                openNotificationSettings()
+            }
         }
     }
 
@@ -108,6 +142,36 @@ class MainActivity : AppCompatActivity() {
         } else {
             NotifyForegroundService.start(this)
         }
+    }
+
+    /**
+     * 展示通知权限用途说明（模板 4.8 分支②：拒绝但可再询问场景）
+     *
+     * 用户此前拒绝过一次，系统建议先解释权限用途再重新申请；
+     * 「重新申请」二次拉起系统权限弹窗，「取消」保留现状（下次启动仍会检查）。
+     */
+    private fun showNotificationPermissionRationale() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.permission_notification_rationale_title)
+            .setMessage(R.string.permission_notification_rationale_desc)
+            .setPositiveButton(R.string.permission_request_again) { _, _ ->
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * 跳转系统应用通知设置页（模板 4.8 分支③：永久拒绝引导）
+     *
+     * 与设置页权限入口（SettingsScreen U1）跳转目标一致，直达本应用通知开关。
+     */
+    private fun openNotificationSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            }
+        )
     }
 }
 
@@ -160,10 +224,27 @@ private fun MainContent(viewModel: NotifyViewModel) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            when (selectedItem) {
-                0 -> HomeScreen(viewModel)
-                1 -> HistoryScreen(viewModel)
-                2 -> SettingsScreen(viewModel)
+            // 页面切换过渡（2026-08-18 16:45 | 动画历史块权限修复 A1）：
+            // 原 when 直切无任何过渡观感生硬，改 AnimatedContent 淡入+轻微垂直位移
+            // （旧页上移淡出、新页自下方轻移淡入），进出补间时长对称；
+            // rememberSaveable 选中态与各页内部输入状态经 SaveableStateRegistry 保持不变
+            AnimatedContent(
+                targetState = selectedItem,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(220)) +
+                        slideInVertically(animationSpec = tween(220)) { it / 16 })
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(180)) +
+                                slideOutVertically(animationSpec = tween(180)) { -it / 16 }
+                        )
+                },
+                label = "PageSwitch"
+            ) { page ->
+                when (page) {
+                    0 -> HomeScreen(viewModel)
+                    1 -> HistoryScreen(viewModel)
+                    2 -> SettingsScreen(viewModel)
+                }
             }
         }
     }

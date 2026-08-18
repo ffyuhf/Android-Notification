@@ -93,6 +93,14 @@
     <!-- ===== 权限提示 ===== -->
     <string name="permission_notification_denied">Notification permission denied. Please enable it in Settings.</string>
     <string name="permission_exact_alarm_needed">Exact alarm permission is required for scheduled notifications. Granting it in Settings.</string>
+    <!-- 新增（2026-08-18 16:41 | 动画历史块权限修复）：权限申请对齐 Android 权限技能模板，
+         通知权限三分支回调（rationale 说明 / 永久拒绝跳设置）与精确闹钟返回重检所需文案 -->
+    <string name="permission_notification_rationale_title">Notification Permission Needed</string>
+    <string name="permission_notification_rationale_desc">Notification permission is required to display, pin and restore your notifications. Denying it means notifications cannot be shown.</string>
+    <string name="permission_request_again">Request Again</string>
+    <string name="permission_open_settings">Open Settings</string>
+    <string name="permission_notification_permanently_denied">Notification permission is permanently denied. Please enable it in Settings.</string>
+    <string name="permission_exact_alarm_denied">Exact alarm permission not granted. Scheduled notification was not created.</string>
 
     <!-- ===== 权限设置入口（2026-08-16 | U1/U2） ===== -->
     <string name="settings_permissions">Permissions</string>

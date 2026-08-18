@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -163,6 +165,46 @@ fun HomeScreen(viewModel: NotifyViewModel) {
     val repeatLabel = repeatOptions.find { it.second == repeatType }?.first
         ?: stringResource(R.string.repeat_none)
 
+    // ===== 定时确认链路（2026-08-18 16:43 | 对齐 Android 权限技能模板 4.6.4）=====
+    /** 权限引导期间挂起的定时提交标记：设置页返回且已授权则自动续跑提交 */
+    var pendingScheduleConfirm by remember { mutableStateOf(false) }
+
+    /** 提交定时发送并清空输入（权限与输入校验通过后调用，原 onConfirm 内联逻辑抽取） */
+    val submitSchedule: () -> Unit = {
+        viewModel.scheduleNotification(
+            title = title.ifBlank { null },
+            content = content,
+            imagePath = imagePath,
+            scheduledAt = scheduledTime,
+            repeatType = repeatType
+        )
+        // 清空输入（图片文件由数据库记录引用，此处仅清 UI 状态）
+        content = ""
+        title = ""
+        imagePath = null
+        scheduledTime = 0L
+        scheduledTimeText = ""
+        repeatType = null
+        showScheduleSheet = false
+    }
+
+    // 精确闹钟设置页返回后重检（不能只信 resultCode，用户可能未开启即返回）
+    val exactAlarmSettingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (hasExactAlarmCapability(context)) {
+            if (pendingScheduleConfirm) {
+                pendingScheduleConfirm = false
+                submitSchedule()
+            }
+        } else {
+            pendingScheduleConfirm = false
+            Toast.makeText(
+                context, R.string.permission_exact_alarm_denied, Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     // ===== 统一骨架：TopAppBar 与历史/设置页一致（P1）=====
     Scaffold(
         topBar = {
@@ -301,23 +343,24 @@ fun HomeScreen(viewModel: NotifyViewModel) {
                 scheduledTimeText = timeText
             },
             onConfirm = {
-                // 精确闹钟权限惰性检查（U1）：具备权限且输入合法才提交定时
-                if (ensureExactAlarmPermission(context) && isValidInput && isScheduledTimeValid) {
-                    viewModel.scheduleNotification(
-                        title = title.ifBlank { null },
-                        content = content,
-                        imagePath = imagePath,
-                        scheduledAt = scheduledTime,
-                        repeatType = repeatType
+                // 精确闹钟权限惰性检查（U1）：具备权限且输入合法才提交定时。
+                // 修正（2026-08-18 16:43 | 对齐权限技能模板 4.6.4）：无权限时不再
+                // 单向 Toast+跳设置，改为挂起提交标记 → 跳设置 → 返回重检，
+                // 已授权自动续跑提交，仍无权限 Toast 明确告知未创建
+                if (!isValidInput || !isScheduledTimeValid) {
+                    // 输入不合法（确认按钮已按条件禁用，此处防御性兜底不动作）
+                } else if (hasExactAlarmCapability(context)) {
+                    submitSchedule()
+                } else {
+                    pendingScheduleConfirm = true
+                    Toast.makeText(
+                        context, R.string.permission_exact_alarm_needed, Toast.LENGTH_LONG
+                    ).show()
+                    exactAlarmSettingsLauncher.launch(
+                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
                     )
-                    // 清空输入（图片文件由数据库记录引用，此处仅清 UI 状态）
-                    content = ""
-                    title = ""
-                    imagePath = null
-                    scheduledTime = 0L
-                    scheduledTimeText = ""
-                    repeatType = null
-                    showScheduleSheet = false
                 }
             },
             onDismiss = { showScheduleSheet = false }
@@ -541,29 +584,18 @@ private fun utcMillisToLocalCalendar(utcMillis: Long): Calendar {
 }
 
 /**
- * 精确闹钟权限惰性检查（U1）
+ * 是否具备精确闹钟能力（重构 2026-08-18 16:43 | 对齐权限技能模板 4.6.4）
  *
- * SCHEDULE_EXACT_ALARM 属特殊访问权限（跳设置页授权），
- * 仅在用户发起定时操作且权限缺失时才引导，避免启动即强跳设置页。
+ * 原 ensureExactAlarmPermission 将「检测」与「跳设置引导」耦合在普通函数中，
+ * 无法感知设置页返回；现拆分为纯检测函数，引导跳转与返回重检由
+ * exactAlarmSettingsLauncher（StartActivityForResult）承接。
+ * Android 12 以下无需该权限直接可用；S 及以上由 canScheduleExactAlarms()
+ * 实时检测（USE_EXACT_ALARM 安装即授予 / SCHEDULE_EXACT_ALARM 需设置页开启）。
  *
  * @param context 上下文
- * @return true 已具备精确闹钟能力可继续发送；false 已引导用户跳转设置页
+ * @return true 可使用精确闹钟；false 需引导用户去设置页开启
  */
-private fun ensureExactAlarmPermission(context: Context): Boolean {
-    // Android 12 以下无需该权限
+private fun hasExactAlarmCapability(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-
-    val alarmManager = context.getSystemService(AlarmManager::class.java)
-    if (alarmManager.canScheduleExactAlarms()) return true
-
-    // 无权限：提示并跳转系统精确闹钟设置页
-    android.widget.Toast.makeText(
-        context, R.string.permission_exact_alarm_needed, android.widget.Toast.LENGTH_LONG
-    ).show()
-    context.startActivity(
-        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-            data = Uri.parse("package:${context.packageName}")
-        }
-    )
-    return false
+    return context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 }
