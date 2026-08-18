@@ -50,7 +50,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -127,6 +126,13 @@ import kotlinx.coroutines.launch
  * - 多选复选框移至卡片底部元数据行末端（右下角），不再位于图片与内容之间左侧
  * - 二级菜单上下文标题行与操作按钮之间增加 HorizontalDivider 明显分隔
  * - 新增 BackHandler：多选模式下返回手势/返回键退出多选而非直接退出应用
+ *
+ * 多选指示与固定状态修正（2026-08-18 22:22）：
+ * - 移除多选复选框：选中态已由 2dp primary 边框完整表达，复选框属冗余指示；
+ *   卡片参数 selectionMode 随之移除（整卡点击切换选中由调用方闭包判断，不受影响）
+ * - resolveItemStatus 的 Pinned 判定补 isActive 校验：取消固定后（deactivateById
+ *   仅置 isActive=0，isPinned 残留）历史块不再误显示「已固定」，语义与 DAO
+ *   getActivePinnedNotifications（isActive=1 AND isPinned=1）对齐
  *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
@@ -443,7 +449,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                     staggeredItems(notifications, key = { it.id }) { notification ->
                         CompactNotificationCard(
                             notification = notification,
-                            selectionMode = selectionMode,
                             isSelected = selectedIds[notification.id] == true,
                             // 短按弹底部操作菜单（改造 2026-08-18 20:46）；
                             // 多选模式保持切换选中不变
@@ -476,7 +481,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                     items(notifications, key = { it.id }) { notification ->
                         NotificationHistoryItem(
                             notification = notification,
-                            selectionMode = selectionMode,
                             isSelected = selectedIds[notification.id] == true,
                             // 短按弹底部操作菜单（改造 2026-08-18 20:46）；
                             // 多选模式保持切换选中不变
@@ -674,7 +678,13 @@ private sealed interface HistoryItemStatus {
 }
 
 /**
- * 解析记录显示状态（原 formatStatusText 的结构化改造，判定逻辑不变）
+ * 解析记录显示状态（原 formatStatusText 的结构化改造）
+ *
+ * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：Pinned 判定补 isActive 校验。
+ * 取消固定链路 deactivateById 仅置 isActive=0（isPinned 保留用户固定意图），
+ * 原「isPinned 即显示已固定」导致已移除通知的历史块永久误显示；
+ * 现与 DAO getActivePinnedNotifications（isActive=1 AND isPinned=1）语义对齐，
+ * 「已固定」严格表示当前真实固定在通知栏，存量脏数据经判定自动修正。
  *
  * @param notification 通知实体
  * @return Pinned / Scheduled / Normal
@@ -682,7 +692,7 @@ private sealed interface HistoryItemStatus {
 private fun resolveItemStatus(notification: NotificationEntity): HistoryItemStatus = when {
     !notification.isActive && notification.scheduledAt != null ->
         HistoryItemStatus.Scheduled(notification.scheduledAt)
-    notification.isPinned -> HistoryItemStatus.Pinned
+    notification.isPinned && notification.isActive -> HistoryItemStatus.Pinned
     else -> HistoryItemStatus.Normal
 }
 
@@ -778,14 +788,13 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
  * 单条历史记录卡片（单列模式，MD3 重绘 P6/P8）
  *
  * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态指示）。
- * 多选模式：整卡点击切换选中，勾选框显示于底部元数据行末端（右下角）。
+ * 多选模式：整卡点击切换选中，选中态由 2dp primary 边框表达。
  * 改造（2026-08-18 20:46）：卡内操作按钮移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
- * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：勾选框由文字区顶部左侧
- * （图片与内容之间）移至底部元数据行右端，不再遮挡通知内容。
+ * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：移除多选复选框
+ * （选中边框已完整表达选中态，复选框属冗余指示），selectionMode 参数随之移除。
  *
  * @param notification 通知实体
- * @param selectionMode 是否处于多选模式
  * @param isSelected 当前记录是否被选中
  * @param onItemClick 点击回调（多选模式切换选中；普通模式弹出操作菜单）
  * @param onItemLongClick 长按回调（进入多选并选中）
@@ -795,7 +804,6 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
 @Composable
 private fun NotificationHistoryItem(
     notification: NotificationEntity,
-    selectionMode: Boolean,
     isSelected: Boolean,
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
@@ -873,12 +881,6 @@ private fun NotificationHistoryItem(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
-                    // 多选勾选框（修正 2026-08-18 21:30 | 图标回退与历史交互修正）：
-                    // 由文字区顶部（图片与内容之间左侧）移至元数据行末端右下角，
-                    // 不再挤压/遮挡通知内容；点击语义保持切换选中
-                    if (selectionMode) {
-                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
-                    }
                 }
             }
         }
@@ -889,14 +891,13 @@ private fun NotificationHistoryItem(
  * 双列紧凑历史记录卡片（两列瀑布流模式，MD3 重绘 P6/P8）
  *
  * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态指示行。
- * 多选模式下整卡点击切换选中，勾选框显示于时间/状态指示行末端（右下角）。
+ * 多选模式下整卡点击切换选中，选中态由 2dp primary 边框表达。
  * 改造（2026-08-18 20:46）：卡内操作按钮行移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
- * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：勾选框由文字区顶部左侧
- * （图片与内容之间）移至指示行右端，不再遮挡通知内容。
+ * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：移除多选复选框
+ * （选中边框已完整表达选中态，复选框属冗余指示），selectionMode 参数随之移除。
  *
  * @param notification 通知实体
- * @param selectionMode 是否处于多选模式
  * @param isSelected 当前记录是否被选中
  * @param onItemClick 点击回调（多选模式切换选中；普通模式弹出操作菜单）
  * @param onItemLongClick 长按回调（进入多选并选中）
@@ -906,7 +907,6 @@ private fun NotificationHistoryItem(
 @Composable
 private fun CompactNotificationCard(
     notification: NotificationEntity,
-    selectionMode: Boolean,
     isSelected: Boolean,
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
@@ -984,11 +984,6 @@ private fun CompactNotificationCard(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
-                    // 多选勾选框（修正 2026-08-18 21:30）：移至指示行末端右下角，
-                    // 不再位于图片与内容之间；点击语义保持切换选中
-                    if (selectionMode) {
-                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
-                    }
                 }
             }
         }

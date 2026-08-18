@@ -40,6 +40,10 @@ import kotlinx.coroutines.withContext
  *   （Android 12+ 模板大图标渲染于通知右侧），左侧白圆未修复且用户不接受右侧图标；
  *   通知头部左上角图标由 SystemUI 渲染应用图标，与应用通知代码无关，
  *   配套措施为启动器 mipmap 移除 monochrome 单色层（见启动器图标资源修正文档）
+ * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：
+ * - 标题为空不再回退软件名：Android 12+ 展开通知时 SystemUI 自动在通知头部
+ *   显示应用名称，应用写入标题位属冗余；null 时标题行不渲染（与 Entity
+ *   title 注释语义一致），折叠视图仅显示内容行
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -125,7 +129,8 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(entity.title ?: context.getString(R.string.app_name))
+            // 标题为 null 不渲染标题行：展开态应用名由 SystemUI 显示于通知头部（2026-08-18 22:22）
+            .setContentTitle(entity.title)
             .setContentText(displayContent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // 更新已存在的通知时不再响铃震动，仅首次发送提醒（P5）
@@ -145,7 +150,8 @@ object NotificationHelper {
             builder.setStyle(
                 NotificationCompat.BigPictureStyle()
                     .bigPicture(imageBitmap)
-                    .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
+                    // 大标题 null 不渲染，应用名由 SystemUI 头部显示（2026-08-18 22:22）
+                    .setBigContentTitle(entity.title)
                     .setSummaryText(displayContent)
             )
         } else {
@@ -157,7 +163,8 @@ object NotificationHelper {
                 builder.setStyle(
                     NotificationCompat.BigTextStyle()
                         .bigText(displayContent)
-                        .setBigContentTitle(entity.title ?: context.getString(R.string.app_name))
+                        // 大标题 null 不渲染，应用名由 SystemUI 头部显示（2026-08-18 22:22）
+                        .setBigContentTitle(entity.title)
                 )
             }
         }
