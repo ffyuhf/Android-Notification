@@ -1,6 +1,7 @@
 package com.android.notify.ui.screen
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -53,6 +54,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -121,6 +123,10 @@ import kotlinx.coroutines.launch
  * - 卡内右下角编辑/发送/删除三按钮移除，改由短按卡片弹出 ModalBottomSheet
  *   底部二级菜单承载（MD3 组件契约）；多选短按切换选中、长按进多选不变；
  *   删除仍走 pendingSingleDelete 二次确认（H2 契约保持）
+ * 图标回退与历史交互修正（2026-08-18 21:30）：
+ * - 多选复选框移至卡片底部元数据行末端（右下角），不再位于图片与内容之间左侧
+ * - 二级菜单上下文标题行与操作按钮之间增加 HorizontalDivider 明显分隔
+ * - 新增 BackHandler：多选模式下返回手势/返回键退出多选而非直接退出应用
  *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
@@ -202,6 +208,11 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
         selectionMode = false
         selectedIds.clear()
     }
+
+    // 多选态返回拦截（新增 2026-08-18 21:30 | 图标回退与历史交互修正）：
+    // 手势导航左右边缘内滑与返回键在多选模式下应退出多选状态，
+    // 而非直接退出应用；enabled 仅多选态生效，普通态返回行为保持系统默认
+    BackHandler(enabled = selectionMode) { exitSelection() }
 
     Scaffold(
         topBar = {
@@ -562,6 +573,9 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp)
             )
+            // 标题与操作区分隔（新增 2026-08-18 21:30 | 图标回退与历史交互修正）：
+            // 上下文标题行与操作按钮之间补明显分隔线，区隔信息区与操作区
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
             // 编辑（应用内编辑页：改标题+图片）
             HistorySheetAction(
                 icon = Icons.Default.Edit,
@@ -764,9 +778,11 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
  * 单条历史记录卡片（单列模式，MD3 重绘 P6/P8）
  *
  * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态指示）。
- * 多选模式：整卡点击切换选中并显示勾选框。
+ * 多选模式：整卡点击切换选中，勾选框显示于底部元数据行末端（右下角）。
  * 改造（2026-08-18 20:46）：卡内操作按钮移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
+ * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：勾选框由文字区顶部左侧
+ * （图片与内容之间）移至底部元数据行右端，不再遮挡通知内容。
  *
  * @param notification 通知实体
  * @param selectionMode 是否处于多选模式
@@ -816,13 +832,6 @@ private fun NotificationHistoryItem(
                     .fillMaxWidth()
                     .padding(12.dp)
             ) {
-                // 多选勾选框（仅多选模式显示）
-                if (selectionMode) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
-                    }
-                }
-
                 // 标题（可选，1行省略）
                 if (!notification.title.isNullOrBlank()) {
                     Text(
@@ -864,6 +873,12 @@ private fun NotificationHistoryItem(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
+                    // 多选勾选框（修正 2026-08-18 21:30 | 图标回退与历史交互修正）：
+                    // 由文字区顶部（图片与内容之间左侧）移至元数据行末端右下角，
+                    // 不再挤压/遮挡通知内容；点击语义保持切换选中
+                    if (selectionMode) {
+                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
+                    }
                 }
             }
         }
@@ -874,9 +889,11 @@ private fun NotificationHistoryItem(
  * 双列紧凑历史记录卡片（两列瀑布流模式，MD3 重绘 P6/P8）
  *
  * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态指示行。
- * 多选模式下整卡点击切换选中并显示勾选框。
+ * 多选模式下整卡点击切换选中，勾选框显示于时间/状态指示行末端（右下角）。
  * 改造（2026-08-18 20:46）：卡内操作按钮行移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
+ * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：勾选框由文字区顶部左侧
+ * （图片与内容之间）移至指示行右端，不再遮挡通知内容。
  *
  * @param notification 通知实体
  * @param selectionMode 是否处于多选模式
@@ -926,11 +943,6 @@ private fun CompactNotificationCard(
                     .fillMaxWidth()
                     .padding(8.dp)
             ) {
-                // 多选勾选框（仅多选模式显示）
-                if (selectionMode) {
-                    Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
-                }
-
                 // 标题（可选，1行省略）
                 if (!notification.title.isNullOrBlank()) {
                     Text(
@@ -972,6 +984,11 @@ private fun CompactNotificationCard(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
+                    // 多选勾选框（修正 2026-08-18 21:30）：移至指示行末端右下角，
+                    // 不再位于图片与内容之间；点击语义保持切换选中
+                    if (selectionMode) {
+                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
+                    }
                 }
             }
         }

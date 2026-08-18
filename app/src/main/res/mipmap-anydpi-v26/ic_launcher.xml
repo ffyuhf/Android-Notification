@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 启动器自适应图标（minSdk=26，anydpi-v26 全覆盖，无需 legacy PNG） -->
-<!-- 背景层品牌绿渐变 + 前景层白色铃铛；monochrome 复用前景供 Android 13+ 主题图标 -->
+<!-- 背景层品牌绿渐变 + 前景层白色铃铛 -->
 <!-- 新增（2026-08-18 20:02 | 图片清晰度图标与转场动画修复） -->
+<!-- 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：移除 monochrome 单色层—— -->
+<!-- 复用 108dp 前景作单色层（铃铛内容仅占中心约 44% 画布），Android 13+ 场景参与 -->
+<!-- 单色化渲染异常，致通知头部左侧应用图标显示为全白圆形；移除后配置回归主流 -->
+<!-- 应用基线（普遍未声明该层），桌面主题图标功能随之失效属可接受代价 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>

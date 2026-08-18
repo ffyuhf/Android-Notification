@@ -68,6 +68,8 @@ import kotlinx.coroutines.withContext
  *   修复有图时自适应图片（最高320dp）将输入框压缩至高度0无法输入的问题
  * MD3 重绘（2026-08-18 16:00 | 界面MD3全面重绘）：
  * - 顶栏配色/输入框圆角与首页统一（P10），可滚动编辑表单契约保持
+ * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：
+ * - 图片预览与内容输入框之间、图片与更换/移除按钮行之间补间距（原完全贴合）
  *
  * 创建日期：2026-05-14
  * 作者：Cline
@@ -200,6 +202,9 @@ private fun EditNotificationContent(
 
             // 图片编辑区域（新增 2026-08-16 | 图片通知）
             if (imagePath != null) {
+                // 图片与内容输入框分隔（修正 2026-08-18 21:30 | 图标回退与历史交互修正）：
+                // 原图片完全贴合在内容输入框下侧，补间距保证视觉分隔
+                Spacer(modifier = Modifier.height(12.dp))
                 // 当前图片预览
                 // 修正（2026-08-16 18:35 | 图片显示自适应修复）：固定高度 + Crop 裁剪
                 // 会截短图片，改按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏）
@@ -211,6 +216,8 @@ private fun EditNotificationContent(
                     cornerRadius = 12.dp,
                     contentDescription = stringResource(R.string.action_add_image)
                 )
+                // 图片与按钮行分隔（修正 2026-08-18 21:30）：避免图片贴合操作按钮
+                Spacer(modifier = Modifier.height(8.dp))
                 // 更换 / 移除图片
                 Row(
                     modifier = Modifier.fillMaxWidth(),

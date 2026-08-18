@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 启动器自适应图标（圆形遮罩声明，图层与方形版一致） -->
 <!-- 新增（2026-08-18 20:02 | 图片清晰度图标与转场动画修复） -->
+<!-- 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：移除 monochrome 单色层， -->
+<!-- 原因见 ic_launcher.xml 同日注释（通知头部左侧图标白圆修复） -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>

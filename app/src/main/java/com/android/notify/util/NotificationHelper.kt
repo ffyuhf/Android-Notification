@@ -4,11 +4,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import androidx.core.content.ContextCompat
 import com.android.notify.NotifyApp
 import com.android.notify.R
 import com.android.notify.data.datastore.NotificationSettingsSnapshot
@@ -37,11 +34,12 @@ import kotlinx.coroutines.withContext
  *   RemoteInput 的 Action 其 PendingIntent 必须可变，IMMUTABLE 会被系统拒绝发布
  *   （恢复失败与主线程崩溃循环的根因）
  * - notify() 包 runCatching 并返回 Boolean：发布失败记 ERROR 日志，不再击穿调用协程
- * 修正（2026-08-18 20:46 | 通知图标全白修复）：
- * - sendNotification 追加 setLargeIcon(启动器图标位图)：通知栏头部显示品牌彩色图标，
- *   与软件图标视觉一致；状态栏小图标保持系统规范单色剪影（Android 5.0+ 仅取 alpha）
- * - 新增 getAppIconBitmap：自适应图标 108dp 画布按 1.5 倍渲染后裁剪中心 2/3 可见区，
- *   @Volatile 进程级缓存；渲染失败返回 null 不影响发布链路
+ * 回退（2026-08-18 21:30 | 图标回退与历史交互修正）：
+ * - 移除 sendNotification 的 setLargeIcon 与 getAppIconBitmap（原 2026-08-18 20:46
+ *   修正引入）：真机（原生 Android 16）验证该方案仅使通知右侧多出软件图标
+ *   （Android 12+ 模板大图标渲染于通知右侧），左侧白圆未修复且用户不接受右侧图标；
+ *   通知头部左上角图标由 SystemUI 渲染应用图标，与应用通知代码无关，
+ *   配套措施为启动器 mipmap 移除 monochrome 单色层（见启动器图标资源修正文档）
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -77,42 +75,6 @@ object NotificationHelper {
 
     /** Intent Extra：通知内容（用于复制） */
     const val EXTRA_NOTIFICATION_CONTENT = "notification_content"
-
-    /** 应用图标位图进程级缓存（批量恢复/巡检重发场景避免重复渲染） */
-    @Volatile
-    private var appIconBitmapCache: Bitmap? = null
-
-    /**
-     * 渲染启动器图标为位图（新增 2026-08-18 20:46 | 通知图标全白修复）
-     *
-     * 实现思路：mipmap 自适应图标为 108dp 双层 Drawable，系统遮罩仅显示中心约 72dp
-     * （2/3 可见区）；直接整幅渲染会导致铃铛占比过小，故按 1.5 倍边长绘制全画布后
-     * 裁剪中心区域，得到与桌面图标观感一致的绿底白铃铛方形位图（通知栏自动裁圆）。
-     * 供通知 setLargeIcon 使用（含前台服务通知），调用侧与状态栏单色剪影互不冲突。
-     *
-     * @param context 上下文
-     * @return 渲染成功的图标位图；资源缺失或渲染失败返回 null（等价未设置，不影响发布）
-     */
-    fun getAppIconBitmap(context: Context): Bitmap? {
-        appIconBitmapCache?.let { return it }
-        val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
-        val bitmap = runCatching {
-            // 目标边长 48dp 物理像素（通知栏图标显示上限量级，过大徒增内存）
-            val sizePx = (48 * context.resources.displayMetrics.density).toInt()
-            // 画布放大 1.5 倍绘制以覆盖 108dp 全幅，再裁剪中心 2/3 可见区
-            val canvasSize = (sizePx * 3f / 2f).toInt()
-            val fullBitmap = Bitmap.createBitmap(canvasSize, canvasSize, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(fullBitmap)
-            drawable.setBounds(0, 0, canvasSize, canvasSize)
-            drawable.draw(canvas)
-            val offset = (canvasSize - sizePx) / 2
-            Bitmap.createBitmap(fullBitmap, offset, offset, sizePx, sizePx)
-        }.getOrNull()
-        if (bitmap != null) {
-            appIconBitmapCache = bitmap
-        }
-        return bitmap
-    }
 
     /**
      * 发送通知到通知栏（挂起函数）
@@ -163,10 +125,6 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            // 通知头部品牌图标（修正 2026-08-18 20:46 | 通知图标全白修复）：
-            // largeIcon 显示与软件图标一致的彩色启动器图标；渲染失败返回 null
-            // 等价未设置不影响发布；状态栏小图标保持系统规范单色剪影
-            .setLargeIcon(getAppIconBitmap(context))
             .setContentTitle(entity.title ?: context.getString(R.string.app_name))
             .setContentText(displayContent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

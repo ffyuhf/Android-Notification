@@ -44,8 +44,9 @@ import com.android.notify.util.AppLogger
  *   CoroutineExceptionHandler——原作用域内未捕获异常（如图片解码 OOM Error）
  *   直接击穿进程导致「启动即闪退」且每次启动必现；现记 ERROR 日志后进程存活，
  *   单条失败由 NotificationHelper 恢复循环的 runCatching 二级隔离兜底
- * - 修正（2026-08-18 20:46 | 通知图标全白修复）：服务通知追加 setLargeIcon
- *   品牌图标，与 sendNotification 展示保持一致
+ * - 回退（2026-08-18 21:30 | 图标回退与历史交互修正）：移除服务通知 setLargeIcon
+ *   （原 2026-08-18 20:46 引入），与 sendNotification 同步回退——真机验证该方案
+ *   仅使通知右侧多出软件图标（Android 12+ 模板大图标渲染于右侧），用户不接受
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -167,9 +168,6 @@ class NotifyForegroundService : Service() {
 
         return NotificationCompat.Builder(this, NotifyApp.CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_notification)
-            // 通知头部品牌图标（修正 2026-08-18 20:46 | 通知图标全白修复）：
-            // 与 sendNotification 一致，复用 NotificationHelper 的图标位图渲染
-            .setLargeIcon(NotificationHelper.getAppIconBitmap(this))
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.notification_service_channel_desc))
             .setPriority(NotificationCompat.PRIORITY_LOW)
