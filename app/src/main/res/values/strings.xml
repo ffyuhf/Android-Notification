@@ -147,4 +147,16 @@
     <string name="toast_notification_post_failed">Failed to post notification</string>
     <string name="toast_log_exported">Logs exported</string>
     <string name="toast_log_export_failed">Failed to export logs</string>
+
+    <!-- ===== About & Feedback (2026-08-18 23:21) ===== -->
+    <string name="about_title">About & Feedback</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_send_feedback">Send Feedback</string>
+    <string name="about_share_app">Share App</string>
+    <string name="about_share_text">A handy notification tool app: %1$s\nProject: %2$s</string>
+    <string name="about_open_source_license">Open Source License</string>
+    <string name="about_license_name">GPL-3.0</string>
+    <string name="about_project_url">Project Repository</string>
+    <string name="about_back_to_settings">Back to settings</string>
+    <string name="about_no_browser">No browser found to open the link</string>
 </resources>

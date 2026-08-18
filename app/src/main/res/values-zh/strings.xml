@@ -147,4 +147,16 @@
     <string name="toast_notification_post_failed">通知发布失败</string>
     <string name="toast_log_exported">日志已导出</string>
     <string name="toast_log_export_failed">日志导出失败</string>
+
+    <!-- ===== 关于与反馈（2026-08-18 23:21 | 历史块边缘与关于反馈页） ===== -->
+    <string name="about_title">关于与反馈</string>
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_send_feedback">发送反馈</string>
+    <string name="about_share_app">分享应用</string>
+    <string name="about_share_text">发现一个实用的通知工具应用：%1$s\n项目地址：%2$s</string>
+    <string name="about_open_source_license">开源许可证</string>
+    <string name="about_license_name">GPL-3.0</string>
+    <string name="about_project_url">项目地址</string>
+    <string name="about_back_to_settings">返回设置</string>
+    <string name="about_no_browser">未找到可打开链接的浏览器</string>
 </resources>

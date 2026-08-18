@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -133,6 +135,11 @@ import kotlinx.coroutines.launch
  * - resolveItemStatus 的 Pinned 判定补 isActive 校验：取消固定后（deactivateById
  *   仅置 isActive=0，isPinned 残留）历史块不再误显示「已固定」，语义与 DAO
  *   getActivePinnedNotifications（isActive=1 AND isPinned=1）对齐
+ *
+ * 历史块边缘与动画区分（2026-08-18 23:21 | 历史块边缘与关于反馈页）：
+ * - 普通态卡片恒有 1dp outlineVariant 静止外边缘（明显外包裹）
+ * - 多选选中态 2dp primary 边框改颜色+宽度双动画过渡（180ms）：
+ *   灰细线 ⇄ 绿粗线平滑渐变，普通/选中边缘在颜色、粗细、动画三重维度区分
  *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
@@ -788,7 +795,9 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
  * 单条历史记录卡片（单列模式，MD3 重绘 P6/P8）
  *
  * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态指示）。
- * 多选模式：整卡点击切换选中，选中态由 2dp primary 边框表达。
+ * 多选模式：整卡点击切换选中，选中态由 2dp primary 边框表达
+ * （2026-08-18 23:21：普通态恒有 1dp outlineVariant 外边缘，选中态边框
+ * 颜色+宽度动画过渡，普通/选中边缘三重维度区分）。
  * 改造（2026-08-18 20:46）：卡内操作按钮移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
  * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：移除多选复选框
@@ -809,6 +818,23 @@ private fun NotificationHistoryItem(
     onItemLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 卡片外边缘（新增 2026-08-18 23:21 | 历史块边缘与关于反馈页）：
+    // 普通态 1dp outlineVariant 静止边缘；多选选中态经颜色+宽度动画过渡至
+    // 2dp primary（灰细线 ⇄ 绿粗线 180ms），与普通边缘三重维度区分
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        },
+        animationSpec = tween(180),
+        label = "singleCardBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 1.dp,
+        animationSpec = tween(180),
+        label = "singleCardBorderWidth"
+    )
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -819,7 +845,7 @@ private fun NotificationHistoryItem(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        border = BorderStroke(borderWidth, borderColor),
         shape = MaterialTheme.shapes.medium
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -891,7 +917,9 @@ private fun NotificationHistoryItem(
  * 双列紧凑历史记录卡片（两列瀑布流模式，MD3 重绘 P6/P8）
  *
  * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态指示行。
- * 多选模式下整卡点击切换选中，选中态由 2dp primary 边框表达。
+ * 多选模式下整卡点击切换选中，选中态由 2dp primary 边框表达
+ * （2026-08-18 23:21：普通态恒有 1dp outlineVariant 外边缘，选中态边框
+ * 颜色+宽度动画过渡，普通/选中边缘三重维度区分）。
  * 改造（2026-08-18 20:46）：卡内操作按钮行移除，编辑/发送/删除统一由
  * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
  * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：移除多选复选框
@@ -912,6 +940,23 @@ private fun CompactNotificationCard(
     onItemLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 卡片外边缘（新增 2026-08-18 23:21 | 历史块边缘与关于反馈页）：
+    // 普通态 1dp outlineVariant 静止边缘；多选选中态经颜色+宽度动画过渡至
+    // 2dp primary（灰细线 ⇄ 绿粗线 180ms），与普通边缘三重维度区分
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        },
+        animationSpec = tween(180),
+        label = "compactCardBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 1.dp,
+        animationSpec = tween(180),
+        label = "compactCardBorderWidth"
+    )
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -922,7 +967,7 @@ private fun CompactNotificationCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        border = BorderStroke(borderWidth, borderColor),
         shape = MaterialTheme.shapes.medium
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

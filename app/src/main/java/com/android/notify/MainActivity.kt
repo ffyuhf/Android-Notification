@@ -13,12 +13,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.android.notify.service.NotifyForegroundService
+import com.android.notify.ui.screen.AboutScreen
 import com.android.notify.ui.screen.HistoryScreen
 import com.android.notify.ui.screen.HomeScreen
 import com.android.notify.ui.screen.SettingsScreen
@@ -211,15 +215,27 @@ private fun MainContent(viewModel: NotifyViewModel) {
         // 状态栏留白统一由各页顶栏自带窗口 inset 处理；消除嵌套 Scaffold
         // 状态栏 inset 双算导致的顶部空白
         contentWindowInsets = WindowInsets(0.dp),
+        // 关于页（selectedItem == 3）为独立二级页面：底栏收起/恢复带
+        // 垂直滑动+淡入淡出过渡（新增 2026-08-18 23:21 | 历史块边缘与
+        // 关于反馈页，MD3 二级页惯例——全局 NavigationBar 仍是唯一底栏）
         bottomBar = {
-            NavigationBar {
-                items.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        selected = selectedItem == index,
-                        onClick = { selectedItem = index }
-                    )
+            AnimatedVisibility(
+                visible = selectedItem != 3,
+                enter = fadeIn(animationSpec = tween(200)) +
+                    slideInVertically(animationSpec = tween(200)) { it },
+                exit = fadeOut(animationSpec = tween(180)) +
+                    slideOutVertically(animationSpec = tween(180)) { it },
+                label = "BottomBarVisibility"
+            ) {
+                NavigationBar {
+                    items.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            selected = selectedItem == index,
+                            onClick = { selectedItem = index }
+                        )
+                    }
                 }
             }
         }
@@ -252,7 +268,11 @@ private fun MainContent(viewModel: NotifyViewModel) {
                 when (page) {
                     0 -> HomeScreen(viewModel)
                     1 -> HistoryScreen(viewModel)
-                    2 -> SettingsScreen(viewModel)
+                    // 关于页（新增 2026-08-18 23:21）：独立二级页面，
+                    // 顶栏返回箭头/返回手势经 onBack 回设置页（2→3 右滑
+                    // 前进、3→2 左滑返回，复用方向感知转场语义）
+                    2 -> SettingsScreen(viewModel, onOpenAbout = { selectedItem = 3 })
+                    3 -> AboutScreen(onBack = { selectedItem = 2 })
                 }
             }
         }

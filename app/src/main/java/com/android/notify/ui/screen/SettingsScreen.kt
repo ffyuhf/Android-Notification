@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatLineSpacing
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -79,6 +81,7 @@ import java.util.Locale
  * 3. 深色模式 / 语言选择（即时生效）
  * 4. 权限管理（通知权限 / 精确闹钟权限）
  * 5. 日志分级别导出
+ * 6. 关于与反馈入口（独立二级页面，新增 2026-08-18 23:21）
  *
  * MD3 重绘（2026-08-18 15:59 | 界面MD3全面重绘）：
  * - P7 深色模式/语言 RadioButton 长列表改为 SingleChoiceSegmentedButtonRow
@@ -94,7 +97,7 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: NotifyViewModel) {
+fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
 
     // 收集设置状态
@@ -288,6 +291,23 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                         Text(stringResource(R.string.settings_export_log_action))
                     }
                 }
+            )
+
+            // ===== 关于与反馈入口（新增 2026-08-18 23:21 | 历史块边缘与
+            // 关于反馈页）：点击进入独立关于页（MainActivity selectedItem = 3，
+            // 底栏收起，转场右滑前进）=====
+            SettingsSectionDivider()
+
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.about_title)) },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                modifier = Modifier.clickable(onClick = onOpenAbout)
             )
         }
     }
