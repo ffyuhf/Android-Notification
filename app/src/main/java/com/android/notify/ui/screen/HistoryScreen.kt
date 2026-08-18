@@ -13,6 +13,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,22 +56,27 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,6 +89,7 @@ import com.android.notify.util.NotificationHelper
 import com.android.notify.viewmodel.NotifyViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * 历史记录页面
@@ -109,6 +116,11 @@ import java.util.Locale
  * - B1-B3 卡片元数据区重构：状态 AssistChip 改行内图标+文本指示
  *   （HistoryStatusIndicator），单列一行同水平面 36dp 按钮，两列两行紧凑
  *   + formatShortDateTime 短时间（修复窄卡时间显示不全/指示换行错位）
+ *
+ * 历史操作菜单改造（2026-08-18 20:46）：
+ * - 卡内右下角编辑/发送/删除三按钮移除，改由短按卡片弹出 ModalBottomSheet
+ *   底部二级菜单承载（MD3 组件契约）；多选短按切换选中、长按进多选不变；
+ *   删除仍走 pendingSingleDelete 二次确认（H2 契约保持）
  *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
@@ -140,6 +152,19 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
     var pendingSingleDelete by remember { mutableStateOf<NotificationEntity?>(null) }
     /** 批量删除确认（H2） */
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
+
+    // ===== 底部操作菜单状态（改造 2026-08-18 20:46）=====
+    /** 菜单目标记录：非空即弹出 ModalBottomSheet */
+    var actionSheetEntity by remember { mutableStateOf<NotificationEntity?>(null) }
+    /** skipPartiallyExpanded=true 直达全展开，避免三项菜单出现半展开中间态 */
+    val actionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetScope = rememberCoroutineScope()
+
+    /** 收起底部菜单：先走 hide 收起动画，动画结束后清空目标状态（避免瞬跳消失） */
+    val dismissActionSheet: () -> Unit = {
+        sheetScope.launch { actionSheetState.hide() }
+            .invokeOnCompletion { actionSheetEntity = null }
+    }
 
     /** 进入多选模式并选中指定记录 */
     val enterSelection: (NotificationEntity) -> Unit = { entity ->
@@ -409,11 +434,16 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             notification = notification,
                             selectionMode = selectionMode,
                             isSelected = selectedIds[notification.id] == true,
-                            onItemClick = { if (selectionMode) toggleSelection(notification) },
+                            // 短按弹底部操作菜单（改造 2026-08-18 20:46）；
+                            // 多选模式保持切换选中不变
+                            onItemClick = {
+                                if (selectionMode) {
+                                    toggleSelection(notification)
+                                } else {
+                                    actionSheetEntity = notification
+                                }
+                            },
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
-                            onResend = { viewModel.resendNotification(notification) },
-                            onDelete = { pendingSingleDelete = notification },
-                            onEdit = { launchEditPage(context, notification.id) },
                             // 列表项增删/置顶位移动画（2026-08-18 16:46 | A4）：
                             // 依赖 items key 生效，消除记录增删时列表瞬间跳变
                             modifier = Modifier.animateItem()
@@ -437,11 +467,16 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             notification = notification,
                             selectionMode = selectionMode,
                             isSelected = selectedIds[notification.id] == true,
-                            onItemClick = { if (selectionMode) toggleSelection(notification) },
+                            // 短按弹底部操作菜单（改造 2026-08-18 20:46）；
+                            // 多选模式保持切换选中不变
+                            onItemClick = {
+                                if (selectionMode) {
+                                    toggleSelection(notification)
+                                } else {
+                                    actionSheetEntity = notification
+                                }
+                            },
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
-                            onResend = { viewModel.resendNotification(notification) },
-                            onDelete = { pendingSingleDelete = notification },
-                            onEdit = { launchEditPage(context, notification.id) },
                             // 列表项增删/置顶位移动画（2026-08-18 16:46 | A4）：
                             // 依赖 items key 生效，消除记录增删时列表瞬间跳变
                             modifier = Modifier.animateItem()
@@ -506,6 +541,58 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
             }
         )
     }
+
+    // ===== 底部操作菜单（改造 2026-08-18 20:46）：短按卡片弹出，
+    // 替代原卡内右下角三按钮；编辑/发送收起菜单后直接执行，
+    // 删除转 pendingSingleDelete 二次确认（H2 契约保持）=====
+    actionSheetEntity?.let { entity ->
+        ModalBottomSheet(
+            onDismissRequest = { actionSheetEntity = null },
+            sheetState = actionSheetState
+        ) {
+            // 上下文标题行：定位当前操作对象（标题为空回退内容或图片占位文案）
+            Text(
+                text = entity.title?.ifBlank { null }
+                    ?: entity.content.ifBlank { stringResource(R.string.image_only_notification) },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+            // 编辑（应用内编辑页：改标题+图片）
+            HistorySheetAction(
+                icon = Icons.Default.Edit,
+                label = stringResource(R.string.action_edit),
+                tint = MaterialTheme.colorScheme.onSurface
+            ) {
+                dismissActionSheet()
+                launchEditPage(context, entity.id)
+            }
+            // 重新发送（复用单条重发链路，响铃按设置决定）
+            HistorySheetAction(
+                icon = Icons.AutoMirrored.Filled.Send,
+                label = stringResource(R.string.btn_resend),
+                tint = MaterialTheme.colorScheme.primary
+            ) {
+                dismissActionSheet()
+                viewModel.resendNotification(entity)
+            }
+            // 删除（保留 H2 二次确认）
+            HistorySheetAction(
+                icon = Icons.Default.Delete,
+                label = stringResource(R.string.btn_delete),
+                tint = MaterialTheme.colorScheme.error
+            ) {
+                dismissActionSheet()
+                pendingSingleDelete = entity
+            }
+            // 底部安全留白（避开手势导航区）
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
 }
 
 /**
@@ -522,6 +609,37 @@ private fun launchEditPage(context: android.content.Context, notificationId: Int
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
     )
+}
+
+/**
+ * 底部操作菜单项（新增 2026-08-18 20:46 | 历史操作菜单改造）
+ *
+ * MD3 菜单列表项样式：leading 图标 + 文本整行点击；
+ * 语义色由调用方传入（编辑 onSurface / 发送 primary / 删除 error）。
+ *
+ * @param icon 行首图标
+ * @param label 操作文案
+ * @param tint 图标与文本颜色
+ * @param onClick 点击回调（调用方负责先收起菜单再执行动作）
+ */
+@Composable
+private fun HistorySheetAction(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
+    }
 }
 
 /**
@@ -645,17 +763,16 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
 /**
  * 单条历史记录卡片（单列模式，MD3 重绘 P6/P8）
  *
- * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态 Chip + 操作按钮）。
- * 多选模式：整卡点击切换选中并显示勾选框，隐藏操作按钮避免误触。
+ * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态指示）。
+ * 多选模式：整卡点击切换选中并显示勾选框。
+ * 改造（2026-08-18 20:46）：卡内操作按钮移除，编辑/发送/删除统一由
+ * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
  *
  * @param notification 通知实体
  * @param selectionMode 是否处于多选模式
  * @param isSelected 当前记录是否被选中
- * @param onItemClick 点击回调（多选模式下切换选中）
+ * @param onItemClick 点击回调（多选模式切换选中；普通模式弹出操作菜单）
  * @param onItemLongClick 长按回调（进入多选并选中）
- * @param onResend 重新发送回调
- * @param onDelete 删除回调
- * @param onEdit 编辑回调
  * @param modifier 外部布局修饰（列表调用方传入 animateItem 实现增删位移动画）
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -666,9 +783,6 @@ private fun NotificationHistoryItem(
     isSelected: Boolean,
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
-    onResend: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -734,10 +848,8 @@ private fun NotificationHistoryItem(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 底部元数据行（重构 2026-08-18 16:44 | B1）：时间 + 状态指示 + 弹性空隙 +
-                // 操作按钮全部同一水平面（CenterVertically），状态指示恒单行不再换行错位；
-                // 按钮统一 36dp 触摸尺寸（icon 18dp），消除 48dp 默认尺寸的额外占位
-                // （多选模式下隐藏按钮避免误触）
+                // 底部元数据行（改造 2026-08-18 20:46）：时间 + 状态指示；
+                // 操作按钮已移至短按弹出的底部菜单，卡内不再渲染按钮
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -752,38 +864,6 @@ private fun NotificationHistoryItem(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
-
-                    if (!selectionMode) {
-                        Row {
-                            // 编辑（应用内编辑页：改标题+图片）
-                            IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = stringResource(R.string.action_edit),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            // 重新发送
-                            IconButton(onClick = onResend, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = stringResource(R.string.btn_resend),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            // 删除
-                            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.btn_delete),
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -793,17 +873,16 @@ private fun NotificationHistoryItem(
 /**
  * 双列紧凑历史记录卡片（两列瀑布流模式，MD3 重绘 P6/P8）
  *
- * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态 Chip + 操作小图标。
- * 多选模式下整卡点击切换选中并显示勾选框，隐藏操作按钮。
+ * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态指示行。
+ * 多选模式下整卡点击切换选中并显示勾选框。
+ * 改造（2026-08-18 20:46）：卡内操作按钮行移除，编辑/发送/删除统一由
+ * 短按卡片弹出的底部二级菜单承载（见 HistoryScreen 的 ModalBottomSheet）。
  *
  * @param notification 通知实体
  * @param selectionMode 是否处于多选模式
  * @param isSelected 当前记录是否被选中
- * @param onItemClick 点击回调（多选模式下切换选中）
+ * @param onItemClick 点击回调（多选模式切换选中；普通模式弹出操作菜单）
  * @param onItemLongClick 长按回调（进入多选并选中）
- * @param onResend 重新发送回调
- * @param onDelete 删除回调
- * @param onEdit 编辑回调
  * @param modifier 外部布局修饰（列表调用方传入 animateItem 实现增删位移动画）
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -814,9 +893,6 @@ private fun CompactNotificationCard(
     isSelected: Boolean,
     onItemClick: () -> Unit,
     onItemLongClick: () -> Unit,
-    onResend: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -880,10 +956,8 @@ private fun CompactNotificationCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // 底部元数据区（重构 2026-08-18 16:44 | B2）：两列窄卡改两行紧凑布局——
-                // 行1：时间短格式（去年份保证窄卡完整显示）+ 状态指示，恒单行；
-                // 行2：操作小按钮（28dp/icon 16dp）右对齐，与元数据各自水平对齐，
-                // 不再相互挤压换行（原时间+Chip 垂直堆叠与按钮错位、时间被省略）
+                // 底部元数据行（改造 2026-08-18 20:46）：时间短格式（去年份保证窄卡
+                // 完整显示）+ 状态指示，恒单行；原行2 操作按钮行已移至底部菜单
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -898,41 +972,6 @@ private fun CompactNotificationCard(
                     )
                     HistoryStatusIndicator(status = resolveItemStatus(notification))
                     Spacer(modifier = Modifier.weight(1f))
-                }
-
-                if (!selectionMode) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        // 编辑
-                        IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.action_edit),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        // 重新发送
-                        IconButton(onClick = onResend, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.btn_resend),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        // 删除
-                        IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.btn_delete),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
