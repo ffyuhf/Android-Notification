@@ -142,8 +142,9 @@ private fun MainContent(viewModel: NotifyViewModel) {
 
     Scaffold(
         // F6（2026-08-16 13:56）：外层导航壳不再叠加系统栏 inset。
-        // 状态栏留白交由子页面自管——History/Settings 的 TopAppBar 自带窗口 inset，
-        // Home 由 statusBarsPadding 补偿；消除嵌套 Scaffold 状态栏 inset 双算导致的顶部空白
+        // MD3 重绘（2026-08-18）：三页（Home/History/Settings）均已设 TopAppBar，
+        // 状态栏留白统一由各页顶栏自带窗口 inset 处理；消除嵌套 Scaffold
+        // 状态栏 inset 双算导致的顶部空白
         contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
             NavigationBar {

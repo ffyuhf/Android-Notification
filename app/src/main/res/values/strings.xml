@@ -107,6 +107,12 @@
     <!-- ===== 定时校验（2026-08-16 | U4） ===== -->
     <string name="error_schedule_past_time">Scheduled time must be in the future</string>
 
+    <!-- ===== MD3 重绘（2026-08-18）：日期时间选择与历史卡片状态 ===== -->
+    <string name="select_time">Select Time</string>
+    <string name="status_pinned">Pinned</string>
+    <string name="status_scheduled">Scheduled</string>
+    <string name="status_normal">Sent</string>
+
     <!-- ===== 图片通知与通知栏内联编辑（2026-08-16） ===== -->
     <string name="image_only_notification">[Image]</string>
     <string name="action_add_image">Add Image</string>

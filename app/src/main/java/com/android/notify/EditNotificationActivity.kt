@@ -66,6 +66,8 @@ import kotlinx.coroutines.withContext
  * 修正（2026-08-16 19:15 | 编辑页图片布局修复）：
  * - 内容 Column 加 verticalScroll，输入框 weight 改 heightIn(min=120dp)，
  *   修复有图时自适应图片（最高320dp）将输入框压缩至高度0无法输入的问题
+ * MD3 重绘（2026-08-18 16:00 | 界面MD3全面重绘）：
+ * - 顶栏配色/输入框圆角与首页统一（P10），可滚动编辑表单契约保持
  *
  * 创建日期：2026-05-14
  * 作者：Cline
@@ -152,7 +154,11 @@ private fun EditNotificationContent(
                             contentDescription = stringResource(R.string.cancel)
                         )
                     }
-                }
+                },
+                // MD3 重绘：顶栏配色与三页统一
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { paddingValues ->
@@ -166,13 +172,14 @@ private fun EditNotificationContent(
                 // 滚动后图片/输入框/按钮在超屏时均可滚动到达
                 .verticalScroll(rememberScrollState())
         ) {
-            // 标题输入
+            // 标题输入（MD3 重绘：圆角与首页输入区统一）
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text(stringResource(R.string.hint_notification_title)) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -187,7 +194,8 @@ private fun EditNotificationContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp),
-                maxLines = 10
+                maxLines = 10,
+                shape = MaterialTheme.shapes.medium
             )
 
             // 图片编辑区域（新增 2026-08-16 | 图片通知）

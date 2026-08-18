@@ -3,7 +3,9 @@ package com.android.notify.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 /**
@@ -41,6 +44,16 @@ private val LightColorScheme = lightColorScheme(
     onBackground = Color(0xFF191C1A),
     surface = Color(0xFFFBFDF8),
     onSurface = Color(0xFF191C1A),
+    // MD3 重绘（2026-08-18 15:52 | 界面MD3全面重绘）：补充 surfaceContainer 系列色槽，
+    // 未指定时回落默认中性色与自定义绿色 surface 不协调；以下取值按本项目绿色调
+    // surface(0xFFFBFDF8) 为锚点派生，保证卡片/顶栏/底部栏层级色与主题一致
+    surfaceDim = Color(0xFFDBDED7),
+    surfaceBright = Color(0xFFFBFDF8),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF5F7F2),
+    surfaceContainer = Color(0xFFEFF1EB),
+    surfaceContainerHigh = Color(0xFFE9EBE5),
+    surfaceContainerHighest = Color(0xFFE3E5DF),
     surfaceVariant = Color(0xFFDDE5DB),
     onSurfaceVariant = Color(0xFF414942),
     outline = Color(0xFF717971),
@@ -74,6 +87,15 @@ private val DarkColorScheme = darkColorScheme(
     onBackground = Color(0xFFE1E3DE),
     surface = Color(0xFF191C1A),
     onSurface = Color(0xFFE1E3DE),
+    // MD3 重绘（2026-08-18 15:52 | 界面MD3全面重绘）：深色侧同套补充，
+    // 以深色 surface(0xFF191C1A) 为锚点派生容器层级色
+    surfaceDim = Color(0xFF111411),
+    surfaceBright = Color(0xFF373A36),
+    surfaceContainerLowest = Color(0xFF131614),
+    surfaceContainerLow = Color(0xFF1B1E1C),
+    surfaceContainer = Color(0xFF1F2220),
+    surfaceContainerHigh = Color(0xFF292C29),
+    surfaceContainerHighest = Color(0xFF343634),
     surfaceVariant = Color(0xFF414942),
     onSurfaceVariant = Color(0xFFC1C9BF),
     outline = Color(0xFF8B938A),
@@ -81,6 +103,20 @@ private val DarkColorScheme = darkColorScheme(
     inverseSurface = Color(0xFFE1E3DE),
     inverseOnSurface = Color(0xFF2E312D),
     inversePrimary = Color(0xFF1B6B4A),
+)
+
+/**
+ * MD3 形状基线（2026-08-18 15:52 | 界面MD3全面重绘）
+ *
+ * 显式固化 Material 3 标准圆角阶梯，全应用卡片/输入框/弹层统一引用，
+ * 后续如需调整圆角只改此处即可全局生效。
+ */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 /**
@@ -142,6 +178,8 @@ fun NotifyAppTheme(
 
     MaterialTheme(
         colorScheme = finalColorScheme,
+        // MD3 重绘（2026-08-18 15:52）：统一形状基线，全局圆角一致
+        shapes = AppShapes,
         content = content
     )
 }

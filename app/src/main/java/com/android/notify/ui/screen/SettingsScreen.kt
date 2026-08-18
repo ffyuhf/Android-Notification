@@ -10,20 +10,44 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ContentCopy
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatLineSpacing
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +56,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -50,20 +75,20 @@ import java.util.Locale
  *
  * 功能：
  * 1. 通知操作按钮开关（复制、编辑、取消固定）
- * 2. 多行显示开关
- * 3. 防删除保护开关
- * 4. 深色模式选择
- * 5. 语言选择（即时生效）
- * 6. 权限管理（通知权限 / 精确闹钟权限）
+ * 2. 多行显示 / 防删除保护 / 重发响铃开关
+ * 3. 深色模式 / 语言选择（即时生效）
+ * 4. 权限管理（通知权限 / 精确闹钟权限）
+ * 5. 日志分级别导出
  *
- * 优化（2026-08-16）：
- * - B4 语言切换经 AppCompatDelegate.setApplicationLocales 即时生效
- * - U1 精确闹钟权限手动入口（Android 12+ 且未授权时显示）
- * - U2 通知权限状态展示与系统设置跳转（架构文档承诺但原未实现）
+ * MD3 重绘（2026-08-18 15:59 | 界面MD3全面重绘）：
+ * - P7 深色模式/语言 RadioButton 长列表改为 SingleChoiceSegmentedButtonRow
+ *   分段按钮（MD3 单选惯例，压缩纵向占用）
+ * - P8 分组重排：MD3 设置页惯例（分组标题 primary 色通栏 + ListItem 通栏 +
+ *   组间分隔线），开关项增加语义图标锚点；顶栏配色与三页统一
  *
- * 修正（2026-08-16 11:57 | F1）：主内容 Column 添加 verticalScroll。
- * 背景：新增"重发响铃"开关（B10）后内容总高超出屏幕可视区，
- * 外观设置区（深色模式/语言）被挤出屏幕外且页面不可滚动导致无法点击。
+ * 逻辑保持（未变更）：B4 语言切换经 AppCompatDelegate 即时生效；
+ * U1 精确闹钟权限手动入口；U2 通知权限状态展示；权限返回自动刷新；
+ * 日志导出（级别对话框 → SAF → Toast）。
  *
  * 创建日期：2026-05-14 | 作者：Cline
  */
@@ -91,7 +116,7 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
         onPauseOrDispose { }
     }
 
-    // ===== 日志导出状态（新增 2026-08-16 15:39 | 日志导出） =====
+    // ===== 日志导出状态 =====
     /** 级别选择对话框显隐 */
     var showLogLevelDialog by remember { mutableStateOf(false) }
     /** 待导出的最低级别（对话框确认后回填，launcher 回调时消费） */
@@ -109,15 +134,18 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) }
+                title = { Text(stringResource(R.string.settings_title)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
-                // F1 修复（2026-08-16）：新增滚动，避免外观设置区被挤出屏幕外无法点击
+                // MD3 设置页惯例：ListItem 通栏无水平 padding，滚动防内容超屏不可达（F1）
                 .verticalScroll(rememberScrollState())
         ) {
             // ===== 通知操作设置 =====
@@ -125,24 +153,28 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_show_copy_button),
+                icon = Icons.AutoMirrored.Filled.ContentCopy,
                 checked = showCopyButton,
                 onCheckedChange = { viewModel.setShowCopyButton(it) }
             )
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_show_edit_button),
+                icon = Icons.Default.Edit,
                 checked = showEditButton,
                 onCheckedChange = { viewModel.setShowEditButton(it) }
             )
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_show_unpin_button),
+                icon = Icons.Default.PushPin,
                 checked = showUnpinButton,
                 onCheckedChange = { viewModel.setShowUnpinButton(it) }
             )
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_multiline_display),
+                icon = Icons.Default.FormatLineSpacing,
                 checked = multilineDisplay,
                 onCheckedChange = { viewModel.setMultilineDisplay(it) }
             )
@@ -150,6 +182,7 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_anti_delete),
                 subtitle = stringResource(R.string.settings_anti_delete_desc),
+                icon = Icons.Default.Shield,
                 checked = antiDeleteProtection,
                 onCheckedChange = { viewModel.setAntiDeleteProtection(it) }
             )
@@ -157,16 +190,20 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_resend_sound),
                 subtitle = stringResource(R.string.settings_resend_sound_desc),
+                icon = Icons.Default.NotificationsActive,
                 checked = resendSoundEnabled,
                 onCheckedChange = { viewModel.setResendSoundEnabled(it) }
             )
 
+            SettingsSectionDivider()
+
             // ===== 外观设置 =====
             SettingsSectionTitle(text = stringResource(R.string.settings_appearance))
 
-            // 深色模式三选一
-            SettingsRadioGroup(
+            // 深色模式三选一（MD3 重绘 P7：分段按钮）
+            SettingsChoiceGroup(
                 title = stringResource(R.string.settings_dark_mode),
+                icon = Icons.Default.DarkMode,
                 options = listOf(
                     stringResource(R.string.dark_mode_system) to "system",
                     stringResource(R.string.dark_mode_light) to "light",
@@ -177,8 +214,9 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
             )
 
             // 语言三选一（切换即时生效，B4）
-            SettingsRadioGroup(
+            SettingsChoiceGroup(
                 title = stringResource(R.string.settings_language),
+                icon = Icons.Default.Language,
                 options = listOf(
                     stringResource(R.string.language_system) to "system",
                     stringResource(R.string.language_chinese) to "zh",
@@ -191,13 +229,16 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                 }
             )
 
-            // ===== 权限管理（U1/U2） =====
+            SettingsSectionDivider()
+
+            // ===== 权限管理（U1/U2）=====
             SettingsSectionTitle(text = stringResource(R.string.settings_permissions))
 
             // 通知权限条目
             SettingsPermissionItem(
                 title = stringResource(R.string.settings_notification_permission),
                 subtitle = stringResource(R.string.settings_notification_permission_desc),
+                icon = Icons.Default.Notifications,
                 granted = notificationGranted,
                 onRequest = {
                     context.startActivity(
@@ -213,6 +254,7 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                 SettingsPermissionItem(
                     title = stringResource(R.string.settings_exact_alarm_permission),
                     subtitle = stringResource(R.string.settings_exact_alarm_permission_desc),
+                    icon = Icons.Default.Alarm,
                     granted = exactAlarmGranted,
                     onRequest = {
                         context.startActivity(
@@ -224,12 +266,21 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
                 )
             }
 
-            // ===== 日志（新增 2026-08-16 15:39 | 日志导出） =====
+            SettingsSectionDivider()
+
+            // ===== 日志 =====
             SettingsSectionTitle(text = stringResource(R.string.settings_log_section))
 
-            androidx.compose.material3.ListItem(
+            ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_export_log)) },
                 supportingContent = { Text(stringResource(R.string.settings_export_log_desc)) },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.Description,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 trailingContent = {
                     OutlinedButton(onClick = { showLogLevelDialog = true }) {
                         Text(stringResource(R.string.settings_export_log_action))
@@ -249,10 +300,10 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
             text = {
                 Column {
                     logLevelChoices.forEachIndexed { index, (labelRes, _) ->
-                        androidx.compose.material3.ListItem(
+                        ListItem(
                             headlineContent = { Text(stringResource(labelRes)) },
                             leadingContent = {
-                                androidx.compose.material3.RadioButton(
+                                RadioButton(
                                     selected = selectedLevelIndex == index,
                                     onClick = { selectedLevelIndex = index }
                                 )
@@ -341,31 +392,59 @@ private fun hasExactAlarmPermission(context: Context): Boolean {
 }
 
 /**
- * 设置分组标题
+ * 设置分组标题（MD3 重绘 P8：primary 色标题通栏分组惯例）
+ *
+ * @param text 分组标题文案
  */
 @Composable
 private fun SettingsSectionTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
     )
 }
 
 /**
- * 设置开关项
+ * 设置分组间分隔线（MD3 重绘 P8：组间留白 + 细分隔）
+ */
+@Composable
+private fun SettingsSectionDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+        thickness = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    )
+}
+
+/**
+ * 设置开关项（MD3 重绘 P8：增加语义图标锚点）
+ *
+ * @param title 开关标题
+ * @param subtitle 可选副标题（用途说明）
+ * @param icon 语义图标
+ * @param checked 当前开关状态
+ * @param onCheckedChange 开关切换回调
  */
 @Composable
 private fun SettingsSwitchItem(
     title: String,
+    icon: ImageVector,
     subtitle: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    androidx.compose.material3.ListItem(
+    ListItem(
         headlineContent = { Text(title) },
         supportingContent = { subtitle?.let { Text(it) } },
+        leadingContent = {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
@@ -373,39 +452,71 @@ private fun SettingsSwitchItem(
 }
 
 /**
- * 设置单选组
+ * 设置单选分组（MD3 重绘 P7：RadioButton 列表改分段按钮）
+ *
+ * @param title 分组标题
+ * @param icon 语义图标
+ * @param options 选项列表（文案 → 值）
+ * @param selected 当前选中值
+ * @param onSelected 选中回调
  */
 @Composable
-private fun SettingsRadioGroup(
+private fun SettingsChoiceGroup(
     title: String,
+    icon: ImageVector,
     options: List<Pair<String, String>>,
     selected: String,
     onSelected: (String) -> Unit
 ) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.bodyLarge,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-    )
-
-    options.forEach { (label, value) ->
-        androidx.compose.material3.ListItem(
-            headlineContent = { Text(label) },
-            leadingContent = {
-                androidx.compose.material3.RadioButton(
-                    selected = selected == value,
-                    onClick = { onSelected(value) }
-                )
-            }
+    // 标题行：图标 + 标题
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+
+    // 单选分段按钮（MD3）：中文标签单行显示
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        options.forEachIndexed { index, (label, value) ->
+            SegmentedButton(
+                selected = selected == value,
+                onClick = { onSelected(value) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                label = {
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            )
+        }
     }
 }
 
 /**
- * 权限条目（U1/U2）
+ * 权限条目（U1/U2，MD3 重绘 P8：增加语义图标）
  *
  * @param title 权限名称
  * @param subtitle 权限用途说明
+ * @param icon 语义图标
  * @param granted 当前授权状态
  * @param onRequest 点击授权按钮回调（跳转对应系统设置页）
  */
@@ -413,12 +524,20 @@ private fun SettingsRadioGroup(
 private fun SettingsPermissionItem(
     title: String,
     subtitle: String,
+    icon: ImageVector,
     granted: Boolean,
     onRequest: () -> Unit
 ) {
-    androidx.compose.material3.ListItem(
+    ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
+        leadingContent = {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         trailingContent = {
             if (granted) {
                 Text(

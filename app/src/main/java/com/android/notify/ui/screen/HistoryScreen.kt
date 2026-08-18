@@ -36,26 +36,32 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,6 +72,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,37 +89,29 @@ import java.util.Locale
  * 历史记录页面
  *
  * 功能：
- * 1. 显示所有通知历史记录列表（单列 / 两列网格可切换，H1）
+ * 1. 显示所有通知历史记录列表（单列 / 两列瀑布流可切换，H1）
  * 2. 每条记录可重新发送或删除（删除需二次确认，H2）
  * 3. 长按进入多选模式：全选 / 反选、批量删除 / 批量发送（H2）
  * 4. 顶栏搜索实时过滤标题与内容（H3）
  *
- * 修正（2026-08-16 13:30 | F1-F5）：
- * F1 两列网格 Spacer item 占格导致左上空白/首条靠右/非Z字形 → 改 contentPadding
- * F2 顶栏三态切换 AnimatedContent 淡入+滑动动画
- * F3 布局切换图标改为跟随当前模式
- * F4 搜索入口移至"历史记录"标题旁
- * F5 移除顶栏"清空全部"按钮（清空走"长按→全选→删除选中"）
+ * MD3 重绘（2026-08-18 15:57 | 界面MD3全面重绘）：
+ * - P4 多选批量操作由页内底部操作栏改为顶栏 actions 化（Google Photos 式）：
+ *   批量发送/删除为顶栏图标按钮，全选/反选收入溢出菜单，
+ *   彻底移除内层 bottomBar，消除与全局 NavigationBar 的双层底栏叠置
+ * - P6 卡片重绘：容器色 surfaceContainerLow（P8）、图片全宽置顶、
+ *   状态由 ●/○/⏰ 文本符号改为 AssistChip（已固定 / 已定时+时间，普通态不占位）
+ * - P9 空状态增加图标引导
+ * - P5 保留既有搜索展开/收起过渡（F7/F9 成果），仅统一顶栏配色
  *
- * 修正（2026-08-16 13:56 | F6-F8）：
- * F6 顶栏上方空白根因 = 嵌套 Scaffold 状态栏 inset 双算（MainActivity 外层
- *    contentWindowInsets 清零后自动消除，本文件无列表改动）
- * F7 普通/搜索顶栏合并为单 TopAppBar，搜索框从按钮位置 expandHorizontally 展开
- * F8 搜索图标恢复 24dp 与"历史记录"标题视觉等大
+ * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
+ * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
  *
- * 修正（2026-08-16 14:45 | F9）：
- * F9 搜索展开锚点修正：F7 锚点 Alignment.End 与按钮实际位置（标题右侧）错位，
- *    改 Alignment.Start 从按钮位置向右展开/收回；标题行退出改纯淡出消除整栏横滑观感
- *
- * 增强（2026-08-16 12:53 | H1/H2/H3）
- *
- * 创建日期：2026-05-14
- * 作者：Cline
+ * 创建日期：2026-05-14 | 作者：Cline
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(viewModel: NotifyViewModel) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     // ===== 数据流 =====
     val notifications by viewModel.filteredNotifications.collectAsState()
@@ -174,10 +173,8 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
 
     Scaffold(
         topBar = {
-            // ===== 双态顶栏（F2/F7 修正 2026-08-16 13:56）：
-            // 多选态与普通/搜索态的整体切换用 AnimatedContent 淡入+滑动过渡；
-            // 普通↔搜索 态合并为单 TopAppBar，title 内 AnimatedVisibility
-            // 实现搜索框从按钮位置展开/收缩（F7），消除整栏横滑的生硬感 =====
+            // ===== 双态顶栏：多选态与普通/搜索态整体切换（淡入+滑动过渡）；
+            // 普通↔搜索 态合并为单 TopAppBar，搜索框从按钮位置展开/收缩（F7/F9）=====
             AnimatedContent(
                 targetState = if (selectionMode) TopBarState.MULTI_SELECT else TopBarState.CONTENT,
                 transitionSpec = {
@@ -188,8 +185,9 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                 label = "HistoryTopBar"
             ) { state ->
                 when (state) {
-                    // ===== 多选模式顶栏（H2） =====
+                    // ===== 多选模式顶栏（MD3 重绘 P4：批量操作顶栏化，替代底部批量栏）=====
                     TopBarState.MULTI_SELECT -> {
+                        var menuExpanded by remember { mutableStateOf(false) }
                         TopAppBar(
                             navigationIcon = {
                                 IconButton(onClick = exitSelection) {
@@ -199,31 +197,88 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                     )
                                 }
                             },
-                            title = { Text(stringResource(R.string.history_selected_count, selectedIds.size)) },
+                            title = {
+                                Text(stringResource(R.string.history_selected_count, selectedIds.size))
+                            },
                             actions = {
-                                TextButton(onClick = selectAllVisible) {
-                                    Text(stringResource(R.string.history_select_all))
+                                // 批量发送：逐条按现有重发链路执行（D3）
+                                IconButton(
+                                    onClick = {
+                                        val entities = notifications.filter { selectedIds[it.id] == true }
+                                        if (entities.isNotEmpty()) {
+                                            viewModel.resendNotifications(entities)
+                                        }
+                                        exitSelection()
+                                    },
+                                    enabled = selectedIds.isNotEmpty()
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = stringResource(R.string.history_send_selected),
+                                        tint = if (selectedIds.isNotEmpty()) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    )
                                 }
-                                TextButton(onClick = invertVisibleSelection) {
-                                    Text(stringResource(R.string.history_invert_selection))
+                                // 批量删除：需二次确认（H2）
+                                IconButton(
+                                    onClick = { showDeleteSelectedDialog = true },
+                                    enabled = selectedIds.isNotEmpty()
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.history_delete_selected),
+                                        tint = if (selectedIds.isNotEmpty()) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    )
                                 }
-                            }
+                                // 全选/反选：低频操作收入溢出菜单
+                                Box {
+                                    IconButton(onClick = { menuExpanded = true }) {
+                                        Icon(
+                                            Icons.Default.MoreVert,
+                                            contentDescription = null
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.history_select_all)) },
+                                            onClick = {
+                                                selectAllVisible()
+                                                menuExpanded = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.history_invert_selection)) },
+                                            onClick = {
+                                                invertVisibleSelection()
+                                                menuExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            )
                         )
                     }
 
-                    // ===== 普通/搜索合并态顶栏（F3/F4/F5/F7/F8 修正 2026-08-16 13:56） =====
+                    // ===== 普通/搜索合并态顶栏（搜索展开机制保留 F7/F9）=====
                     TopBarState.CONTENT -> {
                         TopAppBar(
                             title = {
-                                // F7：标题行与搜索框用 AnimatedVisibility 互斥切换，
-                                // 实现"从按钮扩大成搜索框"的过渡
-                                // F9（2026-08-16 14:45）：锚点改 Alignment.Start——
-                                // 搜索按钮位于标题右侧（左半区），搜索框从按钮位置向右展开成整行，
-                                // 关闭时反向收回按钮位置（原 End 锚点错位在右端，叠加标题行反向
-                                // 收缩形成整栏横滑观感）
                                 Box(modifier = Modifier.fillMaxWidth()) {
-                                    // 搜索框（H3）：进入时从按钮位置（Start）向右展开 + 淡入，
-                                    // 退出时向按钮位置（Start）收缩 + 淡出
+                                    // 搜索框（H3）：从按钮位置（Start）向右展开 + 淡入，
+                                    // 关闭时向按钮位置收缩 + 淡出
                                     AnimatedVisibility(
                                         visible = isSearching,
                                         enter = expandHorizontally(
@@ -253,8 +308,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
-                                    // 标题行：退出时仅淡出（F9 去掉横向收缩，
-                                    // 避免与搜索框展开叠加出整栏横滑观感）
+                                    // 标题行：退出时仅淡出，避免整栏横滑观感（F9）
                                     AnimatedVisibility(
                                         visible = !isSearching,
                                         enter = fadeIn(animationSpec = tween(220)),
@@ -264,8 +318,6 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                             Text(stringResource(R.string.history_title))
                                             if (notifications.isNotEmpty()) {
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                // F4：搜索入口紧邻"历史记录"标题
-                                                // F8：图标恢复 Material 标准 24dp，与标题文字视觉等大
                                                 IconButton(
                                                     onClick = { isSearching = true },
                                                     modifier = Modifier.size(32.dp)
@@ -290,7 +342,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
                                     }
                                 } else if (notifications.isNotEmpty()) {
-                                    // F3：布局切换按钮图标跟随当前模式（单列态显示 ViewAgenda，两列态显示 ViewWeek）
+                                    // 布局切换：图标跟随当前模式（单列态 ViewAgenda，两列态 ViewWeek）
                                     IconButton(onClick = {
                                         viewModel.setHistoryLayoutMode(
                                             if (isTwoColumn) "single" else "two_column"
@@ -304,65 +356,18 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                                             )
                                         )
                                     }
-                                    // F5：清空全部按钮已移除，清空场景走"长按→全选→删除选中"
                                 }
-                            }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
                         )
                     }
                 }
             }
-        },
-        bottomBar = {
-            // ===== 多选批量操作栏（H2） =====
-            if (selectionMode) {
-                Surface(tonalElevation = 3.dp) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 批量发送：逐条按现有重发链路执行（D3）
-                        OutlinedButton(
-                            onClick = {
-                                val entities = notifications.filter { selectedIds[it.id] == true }
-                                if (entities.isNotEmpty()) {
-                                    viewModel.resendNotifications(entities)
-                                }
-                                exitSelection()
-                            },
-                            enabled = selectedIds.isNotEmpty(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.history_send_selected))
-                        }
-                        // 批量删除：需二次确认（H2）
-                        Button(
-                            onClick = { showDeleteSelectedDialog = true },
-                            enabled = selectedIds.isNotEmpty(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.history_delete_selected))
-                        }
-                    }
-                }
-            }
         }
+        // MD3 重绘 P4：多选批量操作已顶栏化，页内不再有 bottomBar，
+        // 全局 NavigationBar 始终为唯一底栏（消除双层底栏叠置）
     ) { paddingValues ->
         when {
             // 无任何记录
@@ -375,15 +380,8 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                 EmptyHistory(message = stringResource(R.string.history_no_match), paddingValues = paddingValues)
             }
 
-            // ===== 两列网格（F1 修正 2026-08-16 13:30） =====
-            // 原实现用 item{Spacer} 做上下留白，Spacer 会独占第一列首格，
-            // 导致左上大片空白、首条记录排右上、整体非Z字形。
-            // 改用 contentPadding 后网格恢复 1 2 / 3 4 行优先 Z 字形排布。
+            // ===== 两列瀑布流（契约保持：StaggeredGrid 各列独立测量，无图卡片紧凑合排）=====
             isTwoColumn -> {
-                // 修正（2026-08-16 18:35 | 图片显示自适应修复）：等高网格换瀑布流，
-                // 消除「同行无图卡片被有图卡片撑高留白」的空间浪费——
-                // LazyVerticalGrid 同行强制等高，LazyVerticalStaggeredGrid 各列独立测量高度，
-                // 无图卡片紧凑自适应，图片完整显示后卡片高度差异化收益更大
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
@@ -403,22 +401,13 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
                             onDelete = { pendingSingleDelete = notification },
-                            onEdit = {
-                                // 应用内编辑页入口：负责改标题+图片（新增 2026-08-16）
-                                context.startActivity(
-                                    Intent(context, EditNotificationActivity::class.java).apply {
-                                        action = "EDIT_${notification.id}"
-                                        putExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, notification.id)
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                    }
-                                )
-                            }
+                            onEdit = { launchEditPage(context, notification.id) }
                         )
                     }
                 }
             }
 
-            // ===== 单列列表（F1：改 contentPadding 保持与网格一致的上下留白） =====
+            // ===== 单列列表 =====
             else -> {
                 LazyColumn(
                     contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
@@ -437,16 +426,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
                             onItemLongClick = { if (!selectionMode) enterSelection(notification) },
                             onResend = { viewModel.resendNotification(notification) },
                             onDelete = { pendingSingleDelete = notification },
-                            onEdit = {
-                                // 应用内编辑页入口：负责改标题+图片（新增 2026-08-16）
-                                context.startActivity(
-                                    Intent(context, EditNotificationActivity::class.java).apply {
-                                        action = "EDIT_${notification.id}"
-                                        putExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, notification.id)
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                    }
-                                )
-                            }
+                            onEdit = { launchEditPage(context, notification.id) }
                         )
                     }
                 }
@@ -454,7 +434,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
         }
     }
 
-    // ===== 单条删除二级确认（H2） =====
+    // ===== 单条删除二级确认（H2）=====
     pendingSingleDelete?.let { entity ->
         AlertDialog(
             onDismissRequest = { pendingSingleDelete = null },
@@ -481,7 +461,7 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
         )
     }
 
-    // ===== 批量删除二级确认（H2） =====
+    // ===== 批量删除二级确认（H2）=====
     if (showDeleteSelectedDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteSelectedDialog = false },
@@ -508,20 +488,122 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
             }
         )
     }
-
-    // F5（2026-08-16 13:30）：清空全部确认框已随顶栏按钮一并移除，
-    // 清空场景走"长按 → 全选 → 删除选中"（deleteAllNotifications 保留为数据层 API）。
 }
 
 /**
- * 顶栏双态（F2 新增 2026-08-16，F7 精简 2026-08-16）：
- * CONTENT = 普通/搜索合并态（内部 AnimatedVisibility 展开搜索框），
- * MULTI_SELECT = 多选态，供 AnimatedContent 整体切换
+ * 应用内编辑页入口：负责改标题+图片（新增 2026-08-16，MD3 重绘抽取为函数消除两处重复）
+ *
+ * @param context 上下文
+ * @param notificationId 待编辑的通知记录 ID
+ */
+private fun launchEditPage(context: android.content.Context, notificationId: Int) {
+    context.startActivity(
+        Intent(context, EditNotificationActivity::class.java).apply {
+            action = "EDIT_$notificationId"
+            putExtra(NotificationHelper.EXTRA_NOTIFICATION_ID, notificationId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+    )
+}
+
+/**
+ * 顶栏双态：CONTENT = 普通/搜索合并态，MULTI_SELECT = 多选态
  */
 private enum class TopBarState { CONTENT, MULTI_SELECT }
 
 /**
- * 空状态提示
+ * 历史卡片显示状态（MD3 重绘 P6：替代 ●/○/⏰ 文本符号的结构化状态）
+ */
+private sealed interface HistoryItemStatus {
+    /** 已固定：通知处于固定展示中 */
+    data object Pinned : HistoryItemStatus
+    /** 已定时未触发：scheduledAt 为计划触发时间 */
+    data class Scheduled(val triggerAtMillis: Long) : HistoryItemStatus
+    /** 普通：已发送的历史记录，不渲染状态 Chip（减少视觉噪音） */
+    data object Normal : HistoryItemStatus
+}
+
+/**
+ * 解析记录显示状态（原 formatStatusText 的结构化改造，判定逻辑不变）
+ *
+ * @param notification 通知实体
+ * @return Pinned / Scheduled / Normal
+ */
+private fun resolveItemStatus(notification: NotificationEntity): HistoryItemStatus = when {
+    !notification.isActive && notification.scheduledAt != null ->
+        HistoryItemStatus.Scheduled(notification.scheduledAt)
+    notification.isPinned -> HistoryItemStatus.Pinned
+    else -> HistoryItemStatus.Normal
+}
+
+/**
+ * 历史卡片状态 AssistChip（MD3 重绘 P6）
+ *
+ * 已固定：primaryContainer 底 + 图钉图标；
+ * 已定时：surfaceContainerHighest 底 + 时钟图标 + 触发时间（MM-dd HH:mm 短格式）；
+ * 普通态不渲染。
+ *
+ * @param status 记录显示状态
+ * @param compact 是否紧凑模式（两列窄卡片使用更小内边距）
+ */
+@Composable
+private fun HistoryStatusChip(status: HistoryItemStatus, compact: Boolean) {
+    when (status) {
+        HistoryItemStatus.Pinned -> {
+            AssistChip(
+                onClick = {},
+                enabled = true,
+                label = { Text(stringResource(R.string.status_pinned)) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                border = null,
+                modifier = Modifier.height(if (compact) 24.dp else 28.dp)
+            )
+        }
+
+        is HistoryItemStatus.Scheduled -> {
+            AssistChip(
+                onClick = {},
+                enabled = true,
+                label = {
+                    Text(
+                        formatScheduledChipTime(status.triggerAtMillis),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = stringResource(R.string.status_scheduled),
+                        modifier = Modifier.size(14.dp)
+                    )
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    leadingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                border = null,
+                modifier = Modifier.height(if (compact) 24.dp else 28.dp)
+            )
+        }
+
+        HistoryItemStatus.Normal -> Unit
+    }
+}
+
+/**
+ * 空状态提示（MD3 重绘 P9：增加图标引导）
  *
  * @param message 空态文案（暂无记录 / 无匹配结果）
  * @param paddingValues Scaffold 内边距
@@ -536,6 +618,13 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Icon(
+            imageVector = Icons.Default.Notifications,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
@@ -545,10 +634,10 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
 }
 
 /**
- * 单条历史记录卡片（单列模式）
+ * 单条历史记录卡片（单列模式，MD3 重绘 P6/P8）
  *
- * 增强（2026-08-16 | H2）：长按进入多选；多选模式下点击切换选中并显示勾选框，
- * 隐藏操作按钮避免误触。
+ * 结构：图片全宽置顶 → 文字区（标题/内容）→ 底部元数据行（时间 + 状态 Chip + 操作按钮）。
+ * 多选模式：整卡点击切换选中并显示勾选框，隐藏操作按钮避免误触。
  *
  * @param notification 通知实体
  * @param selectionMode 是否处于多选模式
@@ -557,6 +646,7 @@ private fun EmptyHistory(message: String, paddingValues: PaddingValues) {
  * @param onItemLongClick 长按回调（进入多选并选中）
  * @param onResend 重新发送回调
  * @param onDelete 删除回调
+ * @param onEdit 编辑回调
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -578,110 +668,108 @@ private fun NotificationHistoryItem(
                 onLongClick = onItemLongClick
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         shape = MaterialTheme.shapes.medium
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 图片缩略图：全宽置顶（AdaptiveImage 契约：按图比例自适应完整显示）
+            if (!notification.imagePath.isNullOrBlank()) {
+                AdaptiveImage(
+                    path = notification.imagePath,
+                    maxHeight = 200.dp,
+                    cornerRadius = 12.dp,
+                    contentDescription = stringResource(R.string.action_add_image),
+                    decodeMaxDimension = 400
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                // 多选勾选框（仅多选模式显示）
                 if (selectionMode) {
-                    Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
+                    }
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    // 标题行
-                    if (!notification.title.isNullOrBlank()) {
+
+                // 标题（可选，1行省略）
+                if (!notification.title.isNullOrBlank()) {
+                    Text(
+                        text = notification.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // 内容（3行省略；纯图通知 content 为空串，显示「[图片]」占位）
+                Text(
+                    text = notification.content.ifBlank {
+                        stringResource(R.string.image_only_notification)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 底部元数据行：时间 + 状态 Chip ｜ 操作按钮（多选模式下隐藏避免误触）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 时间与状态
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text(
-                            text = notification.title,
-                            style = MaterialTheme.typography.titleSmall,
+                            text = formatHistoryTime(notification.createdAt),
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        HistoryStatusChip(status = resolveItemStatus(notification), compact = false)
                     }
-                    // 内容（纯图通知 content 为空串，显示「[图片]」占位）
-                    Text(
-                        text = notification.content.ifBlank {
-                            stringResource(R.string.image_only_notification)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    // 图片缩略图（图片通知，新增 2026-08-16；
-                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步，
-                    // 原主线程逐项同步解码在多图列表场景线性放大内存与卡顿；
-                    // 修正 2026-08-16 18:35 | 图片显示自适应修复：固定高度 + Crop
-                    // 截短图片，改按图片宽高比自适应高度完整显示）
-                    if (!notification.imagePath.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        AdaptiveImage(
-                            path = notification.imagePath,
-                            maxHeight = 200.dp,
-                            cornerRadius = 8.dp,
-                            contentDescription = stringResource(R.string.action_add_image),
-                            decodeMaxDimension = 400
-                        )
-                    }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 底部信息行：时间 + 状态 + 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 时间和状态信息
-                Column {
-                    Text(
-                        text = formatHistoryTime(notification.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatStatusText(notification),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (notification.isActive && notification.isPinned)
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // 操作按钮（多选模式下隐藏避免误触）
-                if (!selectionMode) {
-                    Row {
-                        // 编辑（应用内编辑页：改标题+图片，新增 2026-08-16）
-                        IconButton(onClick = onEdit) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.action_edit),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        // 重新发送
-                        IconButton(onClick = onResend) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.btn_resend),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        // 删除
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.btn_delete),
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                    if (!selectionMode) {
+                        Row {
+                            // 编辑（应用内编辑页：改标题+图片）
+                            IconButton(onClick = onEdit) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = stringResource(R.string.action_edit),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // 重新发送
+                            IconButton(onClick = onResend) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.btn_resend),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            // 删除
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.btn_delete),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
@@ -691,9 +779,9 @@ private fun NotificationHistoryItem(
 }
 
 /**
- * 双列紧凑历史记录卡片（H1 新增，两列网格模式）
+ * 双列紧凑历史记录卡片（两列瀑布流模式，MD3 重绘 P6/P8）
  *
- * 信息精简排布：标题1行 + 内容2行 + 时间/状态 + 操作小图标。
+ * 信息精简排布：图片全宽置顶 + 标题1行 + 内容2行 + 时间/状态 Chip + 操作小图标。
  * 多选模式下整卡点击切换选中并显示勾选框，隐藏操作按钮。
  *
  * @param notification 通知实体
@@ -703,6 +791,7 @@ private fun NotificationHistoryItem(
  * @param onItemLongClick 长按回调（进入多选并选中）
  * @param onResend 重新发送回调
  * @param onDelete 删除回调
+ * @param onEdit 编辑回调
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -724,113 +813,105 @@ private fun CompactNotificationCard(
                 onLongClick = onItemLongClick
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         shape = MaterialTheme.shapes.medium
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 图片缩略图：全宽置顶（AdaptiveImage 契约保持）
+            if (!notification.imagePath.isNullOrBlank()) {
+                AdaptiveImage(
+                    path = notification.imagePath,
+                    maxHeight = 160.dp,
+                    cornerRadius = 12.dp,
+                    contentDescription = stringResource(R.string.action_add_image),
+                    decodeMaxDimension = 300
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                // 多选勾选框（仅多选模式显示）
                 if (selectionMode) {
                     Checkbox(checked = isSelected, onCheckedChange = { onItemClick() })
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    // 标题（可选，1行省略）
-                    if (!notification.title.isNullOrBlank()) {
+
+                // 标题（可选，1行省略）
+                if (!notification.title.isNullOrBlank()) {
+                    Text(
+                        text = notification.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+
+                // 内容摘要（2行省略；纯图通知显示「[图片]」占位）
+                Text(
+                    text = notification.content.ifBlank {
+                        stringResource(R.string.image_only_notification)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // 底部：时间/状态 + 操作小图标（多选模式下隐藏避免误触）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = notification.title,
-                            style = MaterialTheme.typography.titleSmall,
+                            text = formatHistoryTime(notification.createdAt),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(2.dp))
+                        HistoryStatusChip(status = resolveItemStatus(notification), compact = true)
                     }
-                    // 内容摘要（2行省略；纯图通知显示「[图片]」占位）
-                    Text(
-                        text = notification.content.ifBlank {
-                            stringResource(R.string.image_only_notification)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    // 图片缩略图（图片通知，新增 2026-08-16；
-                    // 修正 2026-08-16 15:39 | 图片通知闪退修复：解码改异步；
-                    // 修正 2026-08-16 18:35 | 图片显示自适应修复：固定高度 + Crop
-                    // 截短图片，改按图片宽高比自适应高度完整显示）
-                    if (!notification.imagePath.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AdaptiveImage(
-                            path = notification.imagePath,
-                            maxHeight = 160.dp,
-                            cornerRadius = 6.dp,
-                            contentDescription = stringResource(R.string.action_add_image),
-                            decodeMaxDimension = 300
-                        )
-                    }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 底部：时间/状态 + 操作小图标
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = formatHistoryTime(notification.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = formatStatusText(notification),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (notification.isActive && notification.isPinned)
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // 操作小图标（多选模式下隐藏避免误触）
-                if (!selectionMode) {
-                    Row {
-                        // 编辑（应用内编辑页：改标题+图片，新增 2026-08-16）
-                        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.action_edit),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        IconButton(onClick = onResend, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.btn_resend),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.btn_delete),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp)
-                            )
+                    if (!selectionMode) {
+                        Row {
+                            // 编辑
+                            IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = stringResource(R.string.action_edit),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            // 重新发送
+                            IconButton(onClick = onResend, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.btn_resend),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            // 删除
+                            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.btn_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -840,27 +921,21 @@ private fun CompactNotificationCard(
 }
 
 /**
- * 格式化历史记录时间显示
+ * 格式化历史记录创建时间显示
+ *
+ * @param timeMillis 创建时间戳
+ * @return yyyy-MM-dd HH:mm 格式文本
  */
 private fun formatHistoryTime(timeMillis: Long): String {
     return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(timeMillis)
 }
 
 /**
- * 格式化定时时间显示
+ * 格式化定时 Chip 触发时间（短格式，控制 Chip 宽度适配两列窄卡片）
+ *
+ * @param timeMillis 定时触发时间戳
+ * @return MM-dd HH:mm 格式文本
  */
-private fun formatScheduledTime(timeMillis: Long): String {
-    return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(timeMillis)
-}
-
-/**
- * 记录状态文本：未触发定时 / 已固定 / 普通
- */
-private fun formatStatusText(notification: NotificationEntity): String {
-    return when {
-        !notification.isActive ->
-            if (notification.scheduledAt != null) "⏰ ${formatScheduledTime(notification.scheduledAt)}" else "○"
-        notification.isPinned -> "●"
-        else -> "○"
-    }
+private fun formatScheduledChipTime(timeMillis: Long): String {
+    return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(timeMillis)
 }
