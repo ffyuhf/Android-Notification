@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
@@ -153,7 +153,9 @@ fun SettingsScreen(viewModel: NotifyViewModel) {
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_show_copy_button),
-                icon = Icons.AutoMirrored.Filled.ContentCopy,
+                // 整改（2026-08-18 16:13 | CI 编译失败）：ContentCopy 无方向性，
+                // 官方未提供 AutoMirrored 版本（区别于 Send），改用标准 Filled 图标
+                icon = Icons.Filled.ContentCopy,
                 checked = showCopyButton,
                 onCheckedChange = { viewModel.setShowCopyButton(it) }
             )
