@@ -203,12 +203,13 @@ private fun EditNotificationContent(
                 // 当前图片预览
                 // 修正（2026-08-16 18:35 | 图片显示自适应修复）：固定高度 + Crop 裁剪
                 // 会截短图片，改按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏）
+                // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
+                // 组件自动按显示区物理像素 1:1 解码（视觉原图）
                 AdaptiveImage(
                     path = imagePath,
                     maxHeight = 320.dp,
                     cornerRadius = 12.dp,
-                    contentDescription = stringResource(R.string.action_add_image),
-                    decodeMaxDimension = 800
+                    contentDescription = stringResource(R.string.action_add_image)
                 )
                 // 更换 / 移除图片
                 Row(

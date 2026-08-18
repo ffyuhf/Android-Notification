@@ -13,11 +13,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -224,18 +225,26 @@ private fun MainContent(viewModel: NotifyViewModel) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            // 页面切换过渡（2026-08-18 16:45 | 动画历史块权限修复 A1）：
-            // 原 when 直切无任何过渡观感生硬，改 AnimatedContent 淡入+轻微垂直位移
-            // （旧页上移淡出、新页自下方轻移淡入），进出补间时长对称；
+            // 页面切换过渡（2026-08-18 20:04 | 图片清晰度图标与转场动画修复）：
+            // 改为方向感知水平 SharedAxis 转场（Material Motion 底部导航规范）——
+            // Tab 索引增大时新页自右滑入（前进），减小时自左滑入（返回），
+            // 旧页向对侧滑出，位移幅度 1/4 屏宽保持克制；
+            // 替换原垂直窜动方案（旧页上移/新页下移，方向感与底部导航不符）；
             // rememberSaveable 选中态与各页内部输入状态经 SaveableStateRegistry 保持不变
             AnimatedContent(
                 targetState = selectedItem,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(220)) +
-                        slideInVertically(animationSpec = tween(220)) { it / 16 })
+                    // 方向感知：目标 Tab 索引大于当前为前进（右滑），否则返回（左滑）
+                    val slideDirection = if (targetState > initialState) 1 else -1
+                    (slideInHorizontally(
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) { slideDirection * it / 4 } +
+                        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)))
                         .togetherWith(
-                            fadeOut(animationSpec = tween(180)) +
-                                slideOutVertically(animationSpec = tween(180)) { -it / 16 }
+                            slideOutHorizontally(
+                                animationSpec = tween(250, easing = FastOutSlowInEasing)
+                            ) { -slideDirection * it / 4 } +
+                                fadeOut(animationSpec = tween(250, easing = FastOutSlowInEasing))
                         )
                 },
                 label = "PageSwitch"

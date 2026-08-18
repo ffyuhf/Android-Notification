@@ -249,12 +249,13 @@ fun HomeScreen(viewModel: NotifyViewModel) {
             // ===== 图片选择区 =====
             if (imagePath != null) {
                 // 已选图片：预览（AdaptiveImage 契约：按图比例自适应完整显示，限高 320dp）
+                // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
+                // 组件自动按显示区物理像素 1:1 解码（视觉原图）
                 AdaptiveImage(
                     path = imagePath,
                     maxHeight = 320.dp,
                     cornerRadius = 12.dp,
-                    contentDescription = stringResource(R.string.action_add_image),
-                    decodeMaxDimension = 800
+                    contentDescription = stringResource(R.string.action_add_image)
                 )
                 TextButton(
                     onClick = removeImage,

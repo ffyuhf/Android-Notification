@@ -33,22 +33,31 @@ import kotlinx.coroutines.withContext
 object AsyncBitmap {
 
     /**
-     * 异步解码私有目录图片并转为 ImageBitmap
+     * 异步解码私有目录图片并转为 ImageBitmap（fit 到显示框）
      *
      * 实现思路：remember 持有可空位图状态；LaunchedEffect 以
-     * (path, maxDimension) 为键在组合协程中执行 IO 解码并回填状态，
+     * (path, targetWidthPx, targetHeightPx) 为键在组合协程中执行 IO 解码并回填状态，
      * 键变化时旧加载自动取消重启；组合期间 value 为 null（调用方按 null
      * 不渲染处理，占位高度由外层布局保持，避免加载闪烁跳动）。
      *
+     * 调整（2026-08-18 19:58 | 图片清晰度修复/视觉原图方案）：解码目标由
+     * 调用方硬编码边长上限改为显示框物理像素，配合
+     * ImageStorageHelper.decodeSampledBitmapToFit 实现 1:1 物理像素显示。
+     *
      * @param path 图片绝对路径；null/空串时状态恒为 null
-     * @param maxDimension 解码目标边长上限（px），由调用方按展示场景指定
+     * @param targetWidthPx 目标显示区宽（物理像素）
+     * @param targetHeightPx 目标显示区高（物理像素）
      * @return 状态对象：解码成功为 ImageBitmap，加载中/失败/无路径为 null
      */
     @Composable
-    fun rememberSampledBitmap(path: String?, maxDimension: Int): State<ImageBitmap?> {
+    fun rememberSampledBitmap(
+        path: String?,
+        targetWidthPx: Int,
+        targetHeightPx: Int
+    ): State<ImageBitmap?> {
         val bitmapState = remember { mutableStateOf<ImageBitmap?>(null) }
-        LaunchedEffect(path, maxDimension) {
-            bitmapState.value = loadSampledImageBitmap(path, maxDimension)
+        LaunchedEffect(path, targetWidthPx, targetHeightPx) {
+            bitmapState.value = loadSampledImageBitmap(path, targetWidthPx, targetHeightPx)
         }
         return bitmapState
     }
@@ -57,13 +66,18 @@ object AsyncBitmap {
      * IO 线程下采样解码并转换为 ImageBitmap（LaunchedEffect 协程内调用）
      *
      * @param path 图片绝对路径；null/空串返回 null
-     * @param maxDimension 解码目标边长上限（px）
+     * @param targetWidthPx 目标显示区宽（物理像素）
+     * @param targetHeightPx 目标显示区高（物理像素）
      * @return 解码成功为 ImageBitmap；无路径/解码失败返回 null
      */
-    private suspend fun loadSampledImageBitmap(path: String?, maxDimension: Int): ImageBitmap? {
+    private suspend fun loadSampledImageBitmap(
+        path: String?,
+        targetWidthPx: Int,
+        targetHeightPx: Int
+    ): ImageBitmap? {
         if (path.isNullOrBlank()) return null
         return withContext(Dispatchers.IO) {
-            ImageStorageHelper.decodeSampledBitmap(path, maxDimension)
+            ImageStorageHelper.decodeSampledBitmapToFit(path, targetWidthPx, targetHeightPx)
         }?.asImageBitmap()
     }
 }

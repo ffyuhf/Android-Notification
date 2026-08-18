@@ -686,13 +686,14 @@ private fun NotificationHistoryItem(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 图片缩略图：全宽置顶（AdaptiveImage 契约：按图比例自适应完整显示）
+            // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
+            // 组件自动按显示区物理像素 1:1 解码（视觉原图）
             if (!notification.imagePath.isNullOrBlank()) {
                 AdaptiveImage(
                     path = notification.imagePath,
                     maxHeight = 200.dp,
                     cornerRadius = 12.dp,
-                    contentDescription = stringResource(R.string.action_add_image),
-                    decodeMaxDimension = 400
+                    contentDescription = stringResource(R.string.action_add_image)
                 )
             }
 
@@ -833,13 +834,14 @@ private fun CompactNotificationCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 图片缩略图：全宽置顶（AdaptiveImage 契约保持）
+            // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
+            // 组件自动按显示区物理像素 1:1 解码（视觉原图）
             if (!notification.imagePath.isNullOrBlank()) {
                 AdaptiveImage(
                     path = notification.imagePath,
                     maxHeight = 160.dp,
                     cornerRadius = 12.dp,
-                    contentDescription = stringResource(R.string.action_add_image),
-                    decodeMaxDimension = 300
+                    contentDescription = stringResource(R.string.action_add_image)
                 )
             }
 

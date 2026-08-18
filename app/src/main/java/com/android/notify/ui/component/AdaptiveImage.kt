@@ -1,6 +1,7 @@
 package com.android.notify.ui.component
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -10,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.notify.util.AsyncBitmap
@@ -35,35 +37,47 @@ import com.android.notify.util.AsyncBitmap
  * 统一替换为本组件，根因与替换范围见计划书
  * [图片显示自适应修复_计划_20260816_18-35-00_v1.0.md]。
  *
+ * 重构（2026-08-18 19:58 | 图片清晰度修复/视觉原图方案）：
+ * - 移除调用方硬编码 decodeMaxDimension（原值 300~800px 远低于屏幕物理像素，
+ *   位图拉伸显示为「图压到不能看」根因）
+ * - 组件内 BoxWithConstraints 自动测量实际显示区物理像素（含屏幕密度），
+ *   按显示区 fit 解码实现 1:1 物理像素显示：肉眼与原图零差别，且解码内存
+ *   不超过屏幕物理分辨率（3x 密度全宽约 1080px，长图受 maxHeight 高度钳制），
+ *   OOM 防线保持
+ *
  * @param path 图片绝对路径；null/空串/解码失败时本组件不渲染任何内容
  * @param maxHeight 图片显示最大高度（dp），防止极端长图占满整屏
  * @param cornerRadius 圆角半径（dp）
  * @param contentDescription 无障碍内容描述
- * @param decodeMaxDimension 解码目标边长上限（px），由调用方按展示场景指定
  */
 @Composable
 fun AdaptiveImage(
     path: String?,
     maxHeight: Dp,
     cornerRadius: Dp,
-    contentDescription: String,
-    decodeMaxDimension: Int
+    contentDescription: String
 ) {
-    // 异步解码：加载中/失败 value 为 null，不渲染图片区（维持现有占位行为）
-    val bitmap by AsyncBitmap.rememberSampledBitmap(path, decodeMaxDimension)
-    bitmap?.let { imageBitmap ->
-        Image(
-            bitmap = imageBitmap,
-            contentDescription = contentDescription,
-            modifier = Modifier
-                .fillMaxWidth()
-                // 按图片真实宽高比自适应高度；ratio 恒为正数（bitmap 尺寸必大于 0）
-                .aspectRatio(imageBitmap.width.toFloat() / imageBitmap.height)
-                // 限高兜底：超限时高度钳制到 maxHeight，Fit 保证完整显示（两侧留白）
-                .heightIn(max = maxHeight)
-                .clip(RoundedCornerShape(cornerRadius)),
-            // Fit：任何容器尺寸下图片等比完整显示，不裁剪
-            contentScale = ContentScale.Fit
-        )
+    BoxWithConstraints {
+        // 视觉原图解码目标 = 实际显示区物理像素（constraints 单位即 px，无需密度换算）
+        val displayWidthPx = constraints.maxWidth
+        val displayHeightPx = with(LocalDensity.current) { maxHeight.roundToPx() }
+
+        // 异步解码：加载中/失败 value 为 null，不渲染图片区（维持现有占位行为）
+        val bitmap by AsyncBitmap.rememberSampledBitmap(path, displayWidthPx, displayHeightPx)
+        bitmap?.let { imageBitmap ->
+            Image(
+                bitmap = imageBitmap,
+                contentDescription = contentDescription,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 按图片真实宽高比自适应高度；ratio 恒为正数（bitmap 尺寸必大于 0）
+                    .aspectRatio(imageBitmap.width.toFloat() / imageBitmap.height)
+                    // 限高兜底：超限时高度钳制到 maxHeight，Fit 保证完整显示（两侧留白）
+                    .heightIn(max = maxHeight)
+                    .clip(RoundedCornerShape(cornerRadius)),
+                // Fit：任何容器尺寸下图片等比完整显示，不裁剪
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
