@@ -141,6 +141,10 @@ import kotlinx.coroutines.launch
  * - 多选选中态 2dp primary 边框改颜色+宽度双动画过渡（180ms）：
  *   灰细线 ⇄ 绿粗线平滑渐变，普通/选中边缘在颜色、粗细、动画三重维度区分
  *
+ * 关于图标与历史二级菜单（2026-08-19 14:45）：
+ * - 二级菜单上下文区重构：标题+通知内容+底部左侧完整时间（含秒），
+ *   修复有标题时仅显示标题、内容不展示的问题（详见 ModalBottomSheet 内注释）
+ *
  * 契约保持：两列瀑布流 LazyVerticalStaggeredGrid（各列独立测量）；
  * 图片缩略图经 AdaptiveImage 完整显示（异步解码 + 限高 + Fit）。
  *
@@ -572,20 +576,50 @@ fun HistoryScreen(viewModel: NotifyViewModel) {
             onDismissRequest = { actionSheetEntity = null },
             sheetState = actionSheetState
         ) {
-            // 上下文标题行：定位当前操作对象（标题为空回退内容或图片占位文案）
-            Text(
-                text = entity.title?.ifBlank { null }
-                    ?: entity.content.ifBlank { stringResource(R.string.image_only_notification) },
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // 上下文信息区（重构 2026-08-19 14:45 | 关于图标与历史二级菜单）：
+            // 标题 + 通知内容 + 底部左侧完整时间三段展示——修复原有标题时
+            // 仅单行显示标题、通知内容不展示的问题；信息层级：标题 onSurface
+            // 醒目 / 内容与时间 onSurfaceVariant 弱化；行数上限约束防止
+            // 超长内容撑爆全展开菜单
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp)
-            )
-            // 标题与操作区分隔（新增 2026-08-18 21:30 | 图标回退与历史交互修正）：
-            // 上下文标题行与操作按钮之间补明显分隔线，区隔信息区与操作区
+            ) {
+                // 标题（可选，最多2行省略；无标题时跳过直接显示内容）
+                if (!entity.title.isNullOrBlank()) {
+                    Text(
+                        text = entity.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                // 通知内容（最多4行省略；纯图通知 content 为空串，回退「[图片]」占位）
+                Text(
+                    text = entity.content.ifBlank {
+                        stringResource(R.string.image_only_notification)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // 底部左侧完整时间（含秒，比历史卡片 yyyy-MM-dd HH:mm 更完整；
+                // 样式对齐卡片元数据行，底部菜单全展开宽度足够完整显示）
+                Text(
+                    text = formatFullDateTime(entity.createdAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // 信息区与操作区分隔（新增 2026-08-18 21:30 | 图标回退与历史交互修正）：
+            // 上下文信息区与操作按钮之间补明显分隔线，区隔信息区与操作区
             HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
             // 编辑（应用内编辑页：改标题+图片）
             HistorySheetAction(
@@ -1043,6 +1077,19 @@ private fun CompactNotificationCard(
  */
 private fun formatHistoryTime(timeMillis: Long): String {
     return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(timeMillis)
+}
+
+/**
+ * 格式化完整日期时间（新增 2026-08-19 14:45 | 关于图标与历史二级菜单）
+ *
+ * 供二级菜单底部时间行使用：底部菜单空间足够，比历史卡片时间
+ * （yyyy-MM-dd HH:mm）多展示秒，形成完整时刻记录。
+ *
+ * @param timeMillis 时间戳
+ * @return yyyy-MM-dd HH:mm:ss 格式文本
+ */
+private fun formatFullDateTime(timeMillis: Long): String {
+    return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(timeMillis)
 }
 
 /**

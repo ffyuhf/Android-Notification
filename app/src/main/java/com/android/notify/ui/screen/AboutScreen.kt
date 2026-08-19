@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -154,27 +154,36 @@ fun AboutScreen(onBack: () -> Unit) {
 /**
  * 应用图标展示（新增 2026-08-18 23:21）
  *
- * 启动器自适应图标还原：背景层（品牌绿对角渐变）+ 前景层（白铃铛）
- * 两矢量全幅叠放——前景 108dp 画布内容占中心约 44%，与系统遮罩下
- * 启动器实际渲染比例一致；22dp 圆角裁剪近似启动器圆角方观感
- * （mipmap 自适应图标 xml 无法直接 painterResource，故按图层组合绘制）。
+ * 修正（2026-08-19 14:45 | 关于图标与历史二级菜单）：
+ * 1. 遮罩外形：22dp 圆角方 → 圆形，与用户启动器圆形图标外形一致
+ * 2. 前景比例：原 108dp 画布整体缩至 96dp 全幅显示，铃铛仅占 44.4%；
+ *    而启动器仅渲染画布中心 72dp 安全区（铃铛占显示尺寸 66.7%），
+ *    铃铛视觉偏小约 1/3。现画布放大至 144dp（= 96 × 108/72）居中
+ *    放置，经 96dp 圆形中心裁剪等效启动器安全区渲染，铃铛（放大后
+ *    64dp < 96dp 直径）完整显示且比例与启动器严格一致
+ *    （mipmap 自适应图标 xml 无法直接 painterResource，故按图层组合绘制）。
  */
 @Composable
 private fun AboutAppIcon() {
     Box(
         modifier = Modifier
             .size(96.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(CircleShape)
     ) {
+        // 双图层 144dp 居中：背景全幅渐变裁剪后仅见中心 2/3 对角逐变，方向不变
         Image(
             painter = painterResource(R.drawable.ic_launcher_background),
             contentDescription = null,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(144.dp)
         )
         Image(
             painter = painterResource(R.drawable.ic_launcher_foreground),
             contentDescription = stringResource(R.string.app_name),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(144.dp)
         )
     }
 }
