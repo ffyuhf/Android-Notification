@@ -252,10 +252,12 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      * 重新发送历史通知
      *
      * 修复（2026-08-16 | B10）：原实现 copy(id=0) 插入新记录，导致历史记录重复累积。
-     * 现改为更新原记录而非插入：刷新 createdAt 实现置顶（列表按 createdAt 降序），
+     * 现改为更新原记录而非插入，
      * 清空定时字段避免未触发定时记录被置为 isActive=true 后重新进入误发路径，
      * 取消旧闹钟与旧通知，重新生成通知栏ID以响铃提醒（D3），
      * 并启动前台保活服务与"立即发送"行为对齐（D4）。
+     * 修正（2026-08-21 20:41 | 历史重发时间保持）：重发不再刷新 createdAt，
+     * 历史时间与列表位置保持最初发送时的状态（取代 B10 的置顶设计）。
      *
      * @param entity 历史通知实体
      */
@@ -268,7 +270,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 批量重新发送历史通知（H2 新增，多选发送使用）
      *
-     * 逐条按现有 resend 链路执行：取消旧闹钟/旧通知 → 新通知栏ID → 更新原记录置顶 → 发送。
+     * 逐条按现有 resend 链路执行：取消旧闹钟/旧通知 → 新通知栏ID → 更新原记录（保持原时间） → 发送。
      *
      * @param entities 待重发的通知实体列表（按传入顺序逐条处理）
      */
@@ -281,6 +283,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 单条重发核心链路（H2 抽取，单条与批量共用）
      *
+     * 修正（2026-08-21 20:41 | 历史重发时间保持）：不再刷新 createdAt，
+     * 历史记录时间与列表位置始终保持最初点击发送时的状态。
+     *
      * @param entity 历史通知实体
      */
     private suspend fun resendNotificationInternal(entity: NotificationEntity) {
@@ -290,9 +295,9 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
         // 生成新通知栏ID：新 ID 首次发布可响铃提醒，不受 setOnlyAlertOnce 静默影响
         val notificationId = NotificationHelper.generateNotificationId(context)
 
-        // 更新原记录：createdAt 置顶；清空定时字段转为即时通知
+        // 更新原记录：保持 createdAt 原值（重发不改历史时间与排序位置）；
+        // 清空定时字段转为即时通知
         val updatedEntity = entity.copy(
-            createdAt = System.currentTimeMillis(),
             scheduledAt = null,
             repeatType = null,
             isActive = true,
