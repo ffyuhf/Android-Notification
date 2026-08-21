@@ -7,10 +7,10 @@ A native Android notification manager: create text & image notifications, send t
 
 [简体中文](README.md)
 
-<div style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
-  <img src="https://img.cdn1.vip/i/6a884fbc00e0b_1787318204.webp" alt="图片一" style="max-width: 30%; height: auto; border-radius: 8px;">
-  <img src="https://img.cdn1.vip/i/6a8850e0bb095_1787318496.webp" alt="图片二" style="max-width: 30%; height: auto; border-radius: 8px;">
-  <img src="https://img.cdn1.vip/i/6a8850df98540_1787318495.webp" alt="图片三" style="max-width: 30%; height: auto; border-radius: 8px;">
+<div align="center" style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+  <img src="https://img.cdn1.vip/i/6a884fbc00e0b_1787318204.webp" alt="图片一" style="width: 220px; border-radius: 12px;">
+  <img src="https://img.cdn1.vip/i/6a8850e0bb095_1787318496.webp" alt="图片二" style="width: 220px; border-radius: 12px;">
+  <img src="https://img.cdn1.vip/i/6a8850df98540_1787318495.webp" alt="图片三" style="width: 220px; border-radius: 12px;">
 </div>
 
 ## Features
