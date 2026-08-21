@@ -7,6 +7,14 @@
 
 原生 Android 通知管理应用：自由创建图文通知，支持即时或定时发送、通知栏持久固定、防删除恢复与完整历史记录管理。基于 Kotlin + Jetpack Compose（Material Design 3）构建，零第三方图片库、零网络权限。
 
+<div style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
+  <img src="https://img.cdn1.vip/i/6a884fbc00e0b_1787318204.webp" alt="图片一" style="max-width: 30%; height: auto; border-radius: 8px;">
+  <img src="https://img.cdn1.vip/i/6a8850e0bb095_1787318496.webp" alt="图片二" style="max-width: 30%; height: auto; border-radius: 8px;">
+  <img src="https://img.cdn1.vip/i/6a8850df98540_1787318495.webp" alt="图片三" style="max-width: 30%; height: auto; border-radius: 8px;">
+</div>
+
+
+
 ## 功能
 
 - **图文通知**：自定义标题 / 正文 / 图片，大图以 BigPictureStyle 原比例展示
