@@ -43,10 +43,28 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
+      # 2a-pre. 动态下载 wrapper JAR（新增 2026-09-13 23:38 | 修复 Wrapper Validation 失败：
+      #     仓库不含 gradle-wrapper.jar，CI 检出后从 Gradle 官方仓库动态下载、用后即弃。
+      #     来源：用户指示 2026-09-13 23:33「JAR不入库、CI构建时下载、用后即弃」（D1 裁决）。
+      #     版本号单一来源：gradle-wrapper.properties 的 distributionUrl——
+      #     升级 Gradle 仅改该文件，本步骤自动跟随，杜绝两处版本漂移；
+      #     下载源为官方不可变 tag 引用，--retry 3 抗网络抖动，-f 确保 HTTP 错误即失败）
+      - name: Download Gradle wrapper JAR
+        run: |
+          GRADLE_VER=$(sed -n \
+            's/^distributionUrl=.*gradle-\([0-9.]*\)-bin\.zip/\1/p' \
+            gradle/wrapper/gradle-wrapper.properties)
+          echo "Downloading gradle-wrapper.jar for Gradle ${GRADLE_VER}"
+          curl -fL --retry 3 -o gradle/wrapper/gradle-wrapper.jar \
+            "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VER}/gradle/wrapper/gradle-wrapper.jar"
+
       # 2a. 校验 Gradle wrapper 完整性（新增 2026-09-13 | 批次一 D5，来源：用户确认 Q3选B；
-      #     F-Droid 官方推荐做法，防 gradle-wrapper.jar 供应链篡改）
+      #     F-Droid 官方推荐做法，防 gradle-wrapper.jar 供应链篡改。
+      #     升级 2026-09-13 23:38 | 旧 gradle/wrapper-validation-action 已官方弃用，替换为
+      #     gradle/actions/wrapper-validation@v6：校验上一步动态下载的 JAR checksum，
+      #     同时消除 DEPRECATION / Node 20 / punycode 警告）
       - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@v3
+        uses: gradle/actions/wrapper-validation@v6
 
       # 3. 缓存 Gradle 依赖
       - name: Cache Gradle packages
@@ -150,8 +168,20 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
+      # 动态下载 wrapper JAR（新增 2026-09-13 23:38 | 用户指示 D1 裁决：JAR 不入库、CI 用后即弃；
+      # 版本读自 gradle-wrapper.properties 单一来源，实现同 build job 同名步骤）
+      - name: Download Gradle wrapper JAR
+        run: |
+          GRADLE_VER=$(sed -n \
+            's/^distributionUrl=.*gradle-\([0-9.]*\)-bin\.zip/\1/p' \
+            gradle/wrapper/gradle-wrapper.properties)
+          echo "Downloading gradle-wrapper.jar for Gradle ${GRADLE_VER}"
+          curl -fL --retry 3 -o gradle/wrapper/gradle-wrapper.jar \
+            "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VER}/gradle/wrapper/gradle-wrapper.jar"
+
+      # 校验升级 v6（2026-09-13 23:38 | 旧 action 已弃用，校验对象为动态下载的 JAR）
       - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@v3
+        uses: gradle/actions/wrapper-validation@v6
 
       - name: Cache Gradle packages
         uses: actions/cache@v5
@@ -198,8 +228,21 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
+      # 动态下载 wrapper JAR（新增 2026-09-13 23:38 | 用户指示 D1 裁决：JAR 不入库、CI 用后即弃；
+      # 版本读自 gradle-wrapper.properties 单一来源，实现同 build job 同名步骤；
+      # 本 job 无 Cache 步骤，下载后直接校验→授权→生成 lockfile）
+      - name: Download Gradle wrapper JAR
+        run: |
+          GRADLE_VER=$(sed -n \
+            's/^distributionUrl=.*gradle-\([0-9.]*\)-bin\.zip/\1/p' \
+            gradle/wrapper/gradle-wrapper.properties)
+          echo "Downloading gradle-wrapper.jar for Gradle ${GRADLE_VER}"
+          curl -fL --retry 3 -o gradle/wrapper/gradle-wrapper.jar \
+            "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VER}/gradle/wrapper/gradle-wrapper.jar"
+
+      # 校验升级 v6（2026-09-13 23:38 | 旧 action 已弃用，校验对象为动态下载的 JAR）
       - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@v3
+        uses: gradle/actions/wrapper-validation@v6
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
