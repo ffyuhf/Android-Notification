@@ -3,7 +3,9 @@
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // kotlin.android 插件移除（2026-09-13 23:57 | AGP9内置Kotlin迁移）：AGP 9.0 起 Kotlin
+    // 支持内置于 AGP，显式应用该插件即致命冲突；来源：CI 错误原文 + Google 官方迁移指南
+    // migrate-to-built-in-kotlin + 用户裁决 Q1=C（计划书 AGP9内置Kotlin迁移修复 v1.0）
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
@@ -65,10 +67,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // kotlinOptions 块移除（2026-09-13 23:57 | AGP9内置Kotlin迁移）：该 DSL 自 AGP 8.8.0 弃用，
+    // 且其扩展随 kotlin.android 插件移除失去注册方；jvmTarget=17 迁移至顶层
+    // kotlin { compilerOptions { } }（见下方），与 compileOptions 显式配对
 
     buildFeatures {
         compose = true
@@ -98,11 +99,25 @@ dependencyLocking {
 
 // 可重复构建：JVM 工具链锚定（新增 2026-09-13 | 批次一 D2；用户反馈 JDK 17 太老，
 // 升至最新 LTS 25，CI setup-java 与 README 矩阵同步；Gradle 9.7.1 官方支持 JVM 17-26）
-// 任何构建环境（本地/CI）统一以 JDK 25 编译，消除 JDK 版本差异导致的字节码不确定性；
-// 注：Android 字节码目标（compileOptions/kotlinOptions=17）由 minSdk 与 D8 desugar 决定，
+// 修改 2026-09-13 23:57 | AGP9内置Kotlin迁移：锚定载体由 KGP kotlin { jvmToolchain(25) } 迁移
+// 为 Gradle 原生 java { toolchain }（用户裁决 Q2=B）——任何构建环境（本地/CI）统一以
+// JDK 25 编译，消除 JDK 版本差异导致的字节码不确定性，锚定语义不变；
+// 注：Android 字节码目标（compileOptions/compilerOptions=17）由 minSdk 与 D8 desugar 决定，
 // 与构建 JDK 为独立维度，维持 17 不变
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+// Kotlin 编译选项（新增 2026-09-13 23:57 | AGP9内置Kotlin迁移）：android 块内 kotlinOptions
+// 自 AGP 8.8.0 弃用且随插件移除失去注册方，按 Google 官方迁移指南 migrate-to-built-in-kotlin
+// 迁移为顶层 kotlin { compilerOptions { } } DSL（用户裁决 Q3=B，写法逐字对齐官方指南）；
+// jvmTarget 维持 17，与上方 compileOptions（Java 17）显式配对
 kotlin {
-    jvmToolchain(25)
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }
 
 dependencies {
