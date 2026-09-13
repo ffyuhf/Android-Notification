@@ -98,12 +98,18 @@ dependencyLocking {
 }
 
 // 依赖锁全量落盘任务（新增 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q1=A；
-// 修正 2026-09-14 01:33 | resolveAndLockAll变体歧义修复，用户裁决 Q1=A）：
+// 修正 2026-09-14 01:33 | resolveAndLockAll变体歧义修复，用户裁决 Q1=A；
+// 补记 2026-09-14 05:51 | 同修复 v1.1，用户裁决 Q1=A 二轮）：
 // 来源：Gradle 官方 dependency_locking 文档原生模式——遍历本模块全部可解析配置逐个
 // 强制依赖图解析写锁（官方 it.resolve() 文件解析模式在 androidTest 配置上必然变体
 // 歧义，缘由与修正详见 doLast 内注释），配合 --write-locks 一次性为所有配置写入锁状态；
 // 不依赖 dependencies 报告任务的解析路径（该路径在本栈 Gradle 9.7.1 + AGP 9.4.0
-// 实测退出码 0 却不落盘锁状态，2026-09-14 CI assembleDebug 失败实证）
+// 实测退出码 0 却不落盘锁状态，2026-09-14 CI assembleDebug 失败实证）。
+// 补记（2026-09-14 05:51）：本任务对 AGP 惰性配置（如 androidApis，assembleDebug
+// 任务图 realize 时才可见）覆盖不到，图解析遍历集合 ≠ 构建所需集合（2026-09-14 CI
+// parseDebugLocalResources 处 MissingLockStateException 实证）；CI 写锁载体已改为
+// 真实构建+--write-locks（官方标准姿势，见 build.yml 三 job 写锁步骤），
+// 本任务保留作本地调试可选工具，非 CI 依赖
 tasks.register("resolveAndLockAll") {
     notCompatibleWithConfigurationCache("Filters configurations at execution time")
     doFirst {
