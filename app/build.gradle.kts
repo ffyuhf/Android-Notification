@@ -97,9 +97,11 @@ dependencyLocking {
     lockMode = LockMode.STRICT
 }
 
-// 依赖锁全量落盘任务（新增 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q1=A）：
+// 依赖锁全量落盘任务（新增 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q1=A；
+// 修正 2026-09-14 01:33 | resolveAndLockAll变体歧义修复，用户裁决 Q1=A）：
 // 来源：Gradle 官方 dependency_locking 文档原生模式——遍历本模块全部可解析配置逐个
-// 强制 resolve()，配合 --write-locks 一次性为所有配置写入锁状态；
+// 强制依赖图解析写锁（官方 it.resolve() 文件解析模式在 androidTest 配置上必然变体
+// 歧义，缘由与修正详见 doLast 内注释），配合 --write-locks 一次性为所有配置写入锁状态；
 // 不依赖 dependencies 报告任务的解析路径（该路径在本栈 Gradle 9.7.1 + AGP 9.4.0
 // 实测退出码 0 却不落盘锁状态，2026-09-14 CI assembleDebug 失败实证）
 tasks.register("resolveAndLockAll") {
@@ -113,7 +115,16 @@ tasks.register("resolveAndLockAll") {
         configurations.filter {
             // 官方注释位：可在此对锁定配置做过滤，本项目锁定全部
             it.isCanBeResolved
-        }.forEach { it.resolve() }
+        }.forEach {
+            // 图解析写锁（修正 2026-09-14 01:33 | resolveAndLockAll变体歧义修复，用户裁决 Q1=A）：
+            // 官方模式的 it.resolve() 会继续做 artifact 文件选择，而 androidTest classpath 内含
+            // 被测项目 :app 自身依赖（application 组件，10 个变体均不声明 library 类别）→
+            // artifact 变体选择必然歧义（2026-09-14 CI 实证）；lockfile 记录的是版本图结果，
+            // 访问 incoming.resolutionResult.root 仅触发依赖图解析即完成写锁，不做 artifact
+            // 选择（Gradle 官方 API 文档：getResolutionResult "will resolve the dependency
+            // graph but will not resolve or download the artifacts"）
+            it.incoming.resolutionResult.root
+        }
     }
 }
 
