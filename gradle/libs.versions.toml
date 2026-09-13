@@ -9,10 +9,14 @@ compileSdk = "36"
 
 # Kotlin & Android
 # 全线升级至最新稳定线（2026-09-13 | 批次一 B1-B3，版本经 Google Maven/Maven Central 实查：
-# AGP 9.4.0 明确支持 compileSdk 36+，KSP 与 Kotlin 2.2.21 严格配套；用户确认 Q1选B+AGP9.4.0）
+#   AGP 9.4.0 明确支持 compileSdk 36+；用户确认 Q1选B+AGP9.4.0）
+# Kotlin/KSP 升级至 2.3 线（2026-09-14 | Kotlin23线升级修复，用户裁决 Q1=B，Maven 实查定稿）：
+#   旧 KSP 2.2.21-2.0.5（曾用于 2026-09-13~09-14，<kotlin>-<ksp> 旧版本号制末代）无条件拒绝
+#   AGP 9 内置 Kotlin（CI 致命诊断）；KSP 2.3.0 起版本号独立制并支持内置 Kotlin
+#   （门槛 AGP≥9.0.0-alpha14，本项目 9.4.0 满足），且官方声明"不再与 Kotlin 编译器版本绑定"
 agp = "9.4.0"
-kotlin = "2.2.21"
-ksp = "2.2.21-2.0.5"
+kotlin = "2.3.21"
+ksp = "2.3.12"
 
 # Compose
 composeBom = "2024.12.01"

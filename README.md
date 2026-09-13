@@ -36,7 +36,7 @@
 | Android SDK | Platform 36（compileSdk / targetSdk 36，最低支持 Android 8.0 / API 26） |
 | Gradle | 9.7.1（经 wrapper 自动获取） |
 | Android Gradle Plugin | 9.4.0 |
-| Kotlin | 2.2.21（KSP 2.2.21-2.0.5） |
+| Kotlin | 2.3.21（KSP 2.3.12） |
 
 依赖经 `gradle.lockfile` 锁定（STRICT 模式），同一版本源码在任何时间构建产出一致。
 

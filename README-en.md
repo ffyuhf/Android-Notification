@@ -34,7 +34,7 @@ Requirements (reproducible-build environment matrix):
 | Android SDK | Platform 36 (compileSdk / targetSdk 36, minimum Android 8.0 / API 26) |
 | Gradle | 9.7.1 (fetched automatically via wrapper) |
 | Android Gradle Plugin | 9.4.0 |
-| Kotlin | 2.2.21 (KSP 2.2.21-2.0.5) |
+| Kotlin | 2.3.21 (KSP 2.3.12) |
 
 Dependencies are locked via `gradle.lockfile` (STRICT mode): the same source revision always builds identically.
 
