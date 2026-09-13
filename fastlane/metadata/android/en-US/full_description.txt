@@ -1,0 +1,14 @@
+A native Android notification manager built with Kotlin + Jetpack Compose (Material Design 3), with zero third-party image libraries and zero network permissions.
+
+Features:
+
+• Rich notifications: custom title / text / image, large image shown via BigPictureStyle at original aspect ratio
+• Scheduled sending: exact-alarm scheduling with cascading date & time pickers and future-time validation
+• Dismiss-proof restore: auto-restore when a notification is swiped away; foreground service periodically re-pins missing ones
+• Notification actions: copy / edit / unpin action buttons (togglable in Settings)
+• Boot restore: pinned notifications automatically restored after device reboot
+• History management: staggered-grid cards, search, multi-select batch send / delete, resend with optional sound
+• Modern UI: Material Design 3, dark mode, Android 12+ dynamic color, Chinese & English
+• Logging: leveled file logging, crash black box, export by level (zero storage permissions)
+
+Licensed under GPL-3.0. Source code: https://github.com/ffyuhf/Android-Notification

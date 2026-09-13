@@ -1,0 +1,1 @@
+问题修复与稳定性改进。详见 https://github.com/ffyuhf/Android-Notification/releases。

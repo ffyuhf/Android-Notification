@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动器图标背景层：品牌绿对角渐变 -->
+<!-- 锚点色取自 Compose 主题 primary(#1B6B4A)，左上亮右下深营造立体感 -->
+<!-- 新增（2026-08-18 20:02 | 图片清晰度图标与转场动画修复）： -->
+<!-- 原启动器图标直接复用 24dp 白色通知剪影被启动器拉伸，无背景层与安全区 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item
+                    android:color="#FF2E8B62"
+                    android:offset="0.0" />
+                <item
+                    android:color="#FF1B6B4A"
+                    android:offset="0.5" />
+                <item
+                    android:color="#FF14503A"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 深色模式颜色（Compose层处理，此处保持最小定义） -->
+<!-- 创建日期：2026-05-14 | 作者：Cline -->
+<resources>
+    <color name="transparent">#00000000</color>
+</resources>
