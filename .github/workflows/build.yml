@@ -80,14 +80,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 4a. 依赖锁定前置（改造 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q1=A）：
+      # 4a. 依赖锁定前置（改造 2026-09-14 05:51 | resolveAndLockAll变体歧义修复 v1.1，用户裁决 Q1=A 二轮）：
+      #     真实构建+--write-locks 写锁（官方标准姿势："use the --write-locks argument
+      #     when running tasks that resolve configurations"）；纯解析路径两类缺口已实证：
+      #     dependencies 报告任务退出码 0 不落盘；resolveAndLockAll 图解析看不见 AGP 惰性配置
+      #     androidApis（2026-09-14 CI parseDebugLocalResources 处 MissingLockStateException）。
+      #     真实任务图 realize 全部所需配置并写锁，覆盖=构建所需；bootstrap 构建后正式步骤全
+      #     UP-TO-DATE 不重复耗时；无 KEYSTORE 时 assembleRelease 自动跳过签名可构建。
       #     lockfile 已提交仓库则跳过；缺失时以官方 resolveAndLockAll 任务全量写锁
       #     （dependencies 报告任务在本栈实测退出码 0 却不落盘，已废弃）；生成后硬校验
       #     非空，失败立即红并报明确错误，杜绝静默通过后在 STRICT 解析处爆出模糊失败
       - name: Ensure dependency locks present
         run: |
-          test -f app/gradle.lockfile || ./gradlew :app:resolveAndLockAll --write-locks --stacktrace
-          test -s app/gradle.lockfile || { echo "::error::app/gradle.lockfile 未生成或为空——resolveAndLockAll 写锁失败"; exit 1; }
+          test -f app/gradle.lockfile || ./gradlew assembleDebug assembleRelease lintDebug --write-locks --stacktrace
+          test -s app/gradle.lockfile || { echo "::error::app/gradle.lockfile 未生成或为空——真实构建写锁失败"; exit 1; }
 
       # 5. 仅 tag 触发：把 tag 版本号写入 versionName/versionCode
       #    v1.2.3 -> versionName "1.2.3"；versionCode 由语义版确定性派生
@@ -198,12 +204,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 依赖锁定前置（改造 2026-09-14 00:43 | 同 build job 实现，用户裁决 Q1=A）：
-      # resolveAndLockAll 全量写锁 + 非空硬校验，替换实测不落盘的 dependencies --write-locks
+      # 依赖锁定前置（改造 2026-09-14 05:51 | 同 build job 实现，用户裁决 Q1=A 二轮）：
+      # 真实构建+--write-locks 写锁（官方标准姿势，覆盖=构建所需，含 AGP 惰性配置 androidApis）
+      # + 非空硬校验；替换纯解析路径（dependencies 报告不落盘/图解析覆盖缺口均已实证废弃）
       - name: Ensure dependency locks present
         run: |
-          test -f app/gradle.lockfile || ./gradlew :app:resolveAndLockAll --write-locks --stacktrace
-          test -s app/gradle.lockfile || { echo "::error::app/gradle.lockfile 未生成或为空——resolveAndLockAll 写锁失败"; exit 1; }
+          test -f app/gradle.lockfile || ./gradlew assembleDebug assembleRelease lintDebug --write-locks --stacktrace
+          test -s app/gradle.lockfile || { echo "::error::app/gradle.lockfile 未生成或为空——真实构建写锁失败"; exit 1; }
 
       - name: Run Lint
         run: ./gradlew lintDebug --stacktrace
@@ -218,7 +225,9 @@ jobs:
 
   # 依赖锁定 lockfile 生成与自动入库作业（新增 2026-09-13 | 批次一 D3；改造 2026-09-14 00:43 |
   # 依赖锁定Lockfile落盘修复，用户裁决 Q1=A/Q2=B + 用户工作流"不在本机运行，仅上传到GitHub编译验证"）：
-  # 手动触发 → resolveAndLockAll 生成 app/gradle.lockfile → 与仓库比对有差异即自动 commit+push
+  # 手动触发 → 真实构建+--write-locks 全量生成 app/gradle.lockfile（官方标准姿势，
+  # 覆盖=三任务全部所需配置，含 AGP 惰性配置 androidApis；2026-09-14 05:51 改造，
+  # resolveAndLockAll 图解析覆盖缺口实证废弃）→ 与仓库比对有差异即自动 commit+push
   # 入库（作者 github-actions[bot]）；artifact 保留为自动提交失败时的人工回退取回通道。
   # 注意：GITHUB_TOKEN 推送的 commit 不触发新 workflow run（GitHub 防递归规则），入库后需
   # 手动触发一次 Android CI Build 做 STRICT 实跑验证；此后 build/lint 严格按入库 lockfile 解析
@@ -259,10 +268,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 写锁命令（改造 2026-09-14 00:43 | 用户裁决 Q1=A）：官方 resolveAndLockAll 任务
-      # 全量落盘，替换实测不落盘的 dependencies --write-locks
+      # 写锁命令（改造 2026-09-14 05:51 | 用户裁决 Q1=A 二轮）：真实构建+--write-locks
+      # 全量落盘（官方标准姿势；纯解析任务两类缺口均已实证废弃——dependencies 报告任务
+      # 退出码 0 不落盘、resolveAndLockAll 图解析看不见 AGP 惰性配置 androidApis）；
+      # 真实任务图 realize 全部所需配置并写锁，覆盖=构建所需；
+      # 无 KEYSTORE 环境变量时 assembleRelease 自动跳过签名，可无条件构建
       - name: Write dependency locks
-        run: ./gradlew :app:resolveAndLockAll --write-locks --stacktrace
+        run: ./gradlew assembleDebug assembleRelease lintDebug --write-locks --stacktrace
 
       # 自动入库（新增 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q2=B）：
       # lockfile 与仓库内容有差异时自动 commit+push；无变化则跳过（不自动更新依赖漂移，
