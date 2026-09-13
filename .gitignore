@@ -1,0 +1,51 @@
+# ===== Gradle =====
+.gradle/
+build/
+app/build/
+*/build/
+
+# ===== IDE =====
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# ===== 本地配置（包含 SDK 路径） =====
+local.properties
+
+# ===== APK 构建产物 =====
+*.apk
+*.aab
+*.ap_
+
+# ===== Kotlin =====
+*.class
+
+# ===== 日志 =====
+*.log
+
+# ===== 签名文件（含补强 2026-09-13 | 批次一 E1：密钥/私钥/证书全防线）=====
+*.jks
+*.keystore
+release.keystore
+keystore.properties
+key.properties
+*.pk8
+*.pem
+
+# ===== IDE（补强 2026-09-13 | 批次一 E2：覆盖 VSCode）=====
+.vscode/
+
+# ===== Kotlin/NDK 构建残留（补强 2026-09-13 | 批次一 E3）=====
+.kotlin/
+.cxx/
+output-metadata.json
+
+# ===== fastlane 输出（补强 2026-09-13 | 批次一 E4）=====
+fastlane/report.xml
+
+# ===== 系统文件 =====
+Thumbs.db
+.Spotlight-V100
+.Trashes
