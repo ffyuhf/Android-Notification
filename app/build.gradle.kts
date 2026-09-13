@@ -23,6 +23,12 @@ android {
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
+            // 签名方案（新增 2026-09-13 23:22 | 用户指令）：v1(JAR)+v2(APK Signature Scheme)+
+            // v3(密钥轮换) 三方案全开，覆盖 minSdk 26 至最新全版本验签；
+            // 与可重复构建兼容（同输入+同密钥产出一致）
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
