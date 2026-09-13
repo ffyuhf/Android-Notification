@@ -90,11 +90,31 @@ ksp {
 }
 
 // 可重复构建：依赖锁定（新增 2026-09-13 | 批次一 D1，来源：用户确认 Q3选B 2026-09-13 22:49）
-// gradle.lockfile 经 CI write-locks 生成后提交仓库；STRICT 模式下依赖解析与
+// gradle.lockfile 经 CI write-locks job 生成后自动提交仓库；STRICT 模式下依赖解析与
 // lockfile 不一致即构建失败，消除传递依赖随时间漂移的不确定性
 dependencyLocking {
     lockAllConfigurations()
     lockMode = LockMode.STRICT
+}
+
+// 依赖锁全量落盘任务（新增 2026-09-14 00:43 | 依赖锁定Lockfile落盘修复，用户裁决 Q1=A）：
+// 来源：Gradle 官方 dependency_locking 文档原生模式——遍历本模块全部可解析配置逐个
+// 强制 resolve()，配合 --write-locks 一次性为所有配置写入锁状态；
+// 不依赖 dependencies 报告任务的解析路径（该路径在本栈 Gradle 9.7.1 + AGP 9.4.0
+// 实测退出码 0 却不落盘锁状态，2026-09-14 CI assembleDebug 失败实证）
+tasks.register("resolveAndLockAll") {
+    notCompatibleWithConfigurationCache("Filters configurations at execution time")
+    doFirst {
+        require(gradle.startParameter.isWriteDependencyLocks) {
+            "$path 必须在命令行携带 --write-locks 运行"
+        }
+    }
+    doLast {
+        configurations.filter {
+            // 官方注释位：可在此对锁定配置做过滤，本项目锁定全部
+            it.isCanBeResolved
+        }.forEach { it.resolve() }
+    }
 }
 
 // 可重复构建：JVM 工具链锚定（新增 2026-09-13 | 批次一 D2；用户反馈 JDK 17 太老，
