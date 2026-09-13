@@ -29,8 +29,12 @@ appcompat = "1.7.0"
 lifecycle = "2.8.7"
 splashScreen = "1.0.1"
 
-# Room
-room = "2.6.1"
+# Room 升级至 2.8 线（2026-09-14 | Room28线升级修复，用户裁决 Q1=A，Google Maven 实查定稿）：
+#   Room 2.6.1（2023 线，KSP1/Kotlin 2.0 早期时代）编译器在 Kotlin 2.3.21 + KSP 2.3.12 栈
+#   崩溃 unexpected jvm signature V（2026-09-14 CI kspDebugKotlin 堆栈实证，崩于 Room
+#   XProcessing QueryMethodProcessor 解析 DAO 类型）；2.7 起为 KMP 重写线（KSP2 支持
+#   起点），2.8.5 为最新稳定适配线；runtime/ktx/compiler 三条经 version.ref 自动跟随
+room = "2.8.5"
 
 # DataStore
 datastore = "1.1.1"
