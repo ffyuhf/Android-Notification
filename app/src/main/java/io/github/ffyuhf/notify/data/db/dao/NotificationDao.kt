@@ -14,9 +14,6 @@ import kotlinx.coroutines.flow.Flow
  *
  * 提供通知记录的 CRUD 操作接口。
  * 所有返回列表的查询均使用 Flow 以支持响应式数据更新。
- *
- * 创建日期：2026-05-14
- * 作者：Cline
  */
 @Dao
 interface NotificationDao {
@@ -55,7 +52,7 @@ interface NotificationDao {
     suspend fun deleteById(id: Int)
 
     /**
-     * 批量删除通知记录（H2 新增，多选删除使用）
+     * 批量删除通知记录（多选删除使用）
      *
      * @param ids 数据库主键ID集合
      */
@@ -119,10 +116,9 @@ interface NotificationDao {
     suspend fun deactivateById(id: Int)
 
     /**
-     * 将指定通知标记为活跃（定时通知触发后使用）
+     * 将指定通知标记为活跃（定时通知触发后使用，与 deactivateById 对称）
      *
-     * B9 修复（2026-08-16）：定时记录创建时为 isActive=false，
-     * 触发后才置为 true，纳入防删除三层保护；与 deactivateById 对称。
+     * 定时记录创建时为 isActive=false，触发后才置为 true，纳入防删除三层保护。
      *
      * @param id 数据库主键ID
      */
@@ -134,7 +130,6 @@ interface NotificationDao {
      *
      * 重复通知触发后回写下次触发时间，作为下次周期计算的基准，
      * 避免以系统当前时间为基准导致的累积漂移。
-     * 修复（2026-08-16 10:40 | B6）
      *
      * @param id 数据库主键ID
      * @param scheduledAt 下一次触发时间戳（毫秒）
@@ -164,7 +159,6 @@ interface NotificationDao {
      * 判断通知栏ID是否已被占用
      *
      * 用于生成通知栏ID时的唯一性校验，避免ID冲突导致通知互相覆盖。
-     * 优化（2026-08-16 10:45 | P6）
      *
      * @param notificationId 通知栏ID
      * @return true表示已存在

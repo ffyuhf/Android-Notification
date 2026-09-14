@@ -62,21 +62,9 @@ import io.github.ffyuhf.notify.viewmodel.NotifyViewModel
  *
  * 职责：
  * 1. Compose 入口，承载底部导航和页面切换
- * 2. 通知权限动态请求（Android 13+）
+ * 2. 通知权限动态请求（Android 13+，回调三分支：授权/可再询问/永久拒绝）
  * 3. 启动前台保活服务
- *
- * 优化（2026-08-16）：
- * - B4 改继承 AppCompatActivity，支持 per-app 语言切换（AppCompatDelegate）
- * - B5 消费 viewModel.message 显示操作结果 Toast（原状态无消费者永不显示）
- * - U1 移除启动时精确闹钟权限强跳（改为定时发送时按需引导，见 HomeScreen）
- * - U3 底部导航选中状态改 rememberSaveable，切页重建后保留
- * - F6 外层 Scaffold contentWindowInsets 清零，消除嵌套 Scaffold 状态栏 inset 双算
- * - 页面切换过渡动画（2026-08-18 16:42 | 动画历史块权限修复 A1）：
- *   when 直切改 AnimatedContent 淡入+轻微上滑，消除切 Tab 生硬直切
- * - 通知权限回调三分支（2026-08-18 16:42 | 同上 C1）：对齐 Android 权限技能模板 4.8，
- *   拒绝可再询问→展示用途说明后可重试；永久拒绝→提示并引导跳通知设置页
- *
- * 创建日期：2026-05-14 | 作者：Cline
+ * 4. 继承 AppCompatActivity 支持 per-app 语言切换（AppCompatDelegate）
  */
 class MainActivity : AppCompatActivity() {
 
@@ -85,7 +73,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * 通知权限请求（dangerous 权限，运行时弹窗）
      *
-     * 回调三分支（2026-08-18 16:42 | 对齐 Android 权限技能模板 4.8）：
+     * 回调三分支：
      * ① 授权 → 启动前台保活服务；
      * ② 拒绝但可再询问（rationale 为 true）→ 展示权限用途说明，用户可重新申请；
      * ③ 拒绝且永久拒绝（不再询问，系统不再弹窗）→ Toast 提示并引导跳应用通知设置页。
@@ -129,10 +117,9 @@ class MainActivity : AppCompatActivity() {
     /**
      * 检查并请求通知权限（Android 13+）
      *
-     * 优化（2026-08-16 | U1）：精确闹钟权限引导从启动流程移除。
-     * SCHEDULE_EXACT_ALARM 属特殊访问权限（跳设置页授权），
-     * 非运行时弹窗权限，启动即强跳设置页打扰用户；
-     * 现改为定时发送确认时按需引导（HomeScreen）并在设置页提供手动入口。
+     * 精确闹钟权限引导不在启动流程：SCHEDULE_EXACT_ALARM 属特殊访问权限
+     * （跳设置页授权），启动即强跳打扰用户；改为定时发送确认时按需引导
+     * （HomeScreen）并在设置页提供手动入口。
      */
     private fun checkAndRequestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -150,7 +137,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 展示通知权限用途说明（模板 4.8 分支②：拒绝但可再询问场景）
+     * 展示通知权限用途说明（分支②：拒绝但可再询问场景）
      *
      * 用户此前拒绝过一次，系统建议先解释权限用途再重新申请；
      * 「重新申请」二次拉起系统权限弹窗，「取消」保留现状（下次启动仍会检查）。
@@ -167,9 +154,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 跳转系统应用通知设置页（模板 4.8 分支③：永久拒绝引导）
+     * 跳转系统应用通知设置页（分支③：永久拒绝引导）
      *
-     * 与设置页权限入口（SettingsScreen U1）跳转目标一致，直达本应用通知开关。
+     * 与设置页权限入口跳转目标一致，直达本应用通知开关。
      */
     private fun openNotificationSettings() {
         startActivity(
@@ -183,17 +170,14 @@ class MainActivity : AppCompatActivity() {
 /**
  * 主内容 Composable
  *
- * 底部导航 + 页面切换。
- * 优化（2026-08-16）：
- * - B5 收集 message 状态显示操作结果 Toast 后清除
- * - U3 selectedItem 使用 rememberSaveable 保留选中页
+ * 底部导航 + 页面切换；收集 message 状态显示操作结果 Toast 后清除。
  */
 @Composable
 private fun MainContent(viewModel: NotifyViewModel) {
-    // rememberSaveable 避免切页/重建后丢失选中Tab（U3）
+    // rememberSaveable 避免切页/重建后丢失选中Tab
     var selectedItem by rememberSaveable { mutableIntStateOf(0) }
 
-    // 消费操作结果消息显示Toast（B5：原 message 状态无消费者，Toast 永不显示）
+    // 消费操作结果消息显示 Toast 后清除
     val context = LocalContext.current
     val message by viewModel.message.collectAsState()
     LaunchedEffect(message) {
@@ -210,14 +194,12 @@ private fun MainContent(viewModel: NotifyViewModel) {
     )
 
     Scaffold(
-        // F6（2026-08-16 13:56）：外层导航壳不再叠加系统栏 inset。
-        // MD3 重绘（2026-08-18）：三页（Home/History/Settings）均已设 TopAppBar，
-        // 状态栏留白统一由各页顶栏自带窗口 inset 处理；消除嵌套 Scaffold
-        // 状态栏 inset 双算导致的顶部空白
+        // 外层导航壳不叠加系统栏 inset：三页均已设 TopAppBar，状态栏留白
+        // 统一由各页顶栏自带窗口 inset 处理；消除嵌套 Scaffold 状态栏
+        // inset 双算导致的顶部空白
         contentWindowInsets = WindowInsets(0.dp),
-        // 关于页（selectedItem == 3）为独立二级页面：底栏收起/恢复带
-        // 垂直滑动+淡入淡出过渡（新增 2026-08-18 23:21 | 历史块边缘与
-        // 关于反馈页，MD3 二级页惯例——全局 NavigationBar 仍是唯一底栏）
+        // 关于页（selectedItem == 3）为独立二级页面：底栏收起/恢复带垂直
+        // 滑动+淡入淡出过渡（MD3 二级页惯例，全局 NavigationBar 仍是唯一底栏）
         bottomBar = {
             AnimatedVisibility(
                 visible = selectedItem != 3,
@@ -241,11 +223,9 @@ private fun MainContent(viewModel: NotifyViewModel) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            // 页面切换过渡（2026-08-18 20:04 | 图片清晰度图标与转场动画修复）：
-            // 改为方向感知水平 SharedAxis 转场（Material Motion 底部导航规范）——
+            // 页面切换过渡：方向感知水平 SharedAxis 转场（Material Motion 底部导航规范）——
             // Tab 索引增大时新页自右滑入（前进），减小时自左滑入（返回），
             // 旧页向对侧滑出，位移幅度 1/4 屏宽保持克制；
-            // 替换原垂直窜动方案（旧页上移/新页下移，方向感与底部导航不符）；
             // rememberSaveable 选中态与各页内部输入状态经 SaveableStateRegistry 保持不变
             AnimatedContent(
                 targetState = selectedItem,
@@ -268,9 +248,8 @@ private fun MainContent(viewModel: NotifyViewModel) {
                 when (page) {
                     0 -> HomeScreen(viewModel)
                     1 -> HistoryScreen(viewModel)
-                    // 关于页（新增 2026-08-18 23:21）：独立二级页面，
-                    // 顶栏返回箭头/返回手势经 onBack 回设置页（2→3 右滑
-                    // 前进、3→2 左滑返回，复用方向感知转场语义）
+                    // 关于页：独立二级页面，顶栏返回箭头/返回手势经 onBack 回设置页
+                    // （2→3 右滑前进、3→2 左滑返回，复用方向感知转场语义）
                     2 -> SettingsScreen(viewModel, onOpenAbout = { selectedItem = 3 })
                     3 -> AboutScreen(onBack = { selectedItem = 2 })
                 }

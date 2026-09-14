@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AndroidManifest.xml -->
 <!-- Android 通知应用清单文件 -->
-<!-- 创建日期：2026-05-14 | 作者：Cline -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -19,18 +17,13 @@
 
     <!-- ===== 可选权限 ===== -->
     <!-- 精确闹钟权限（定时通知）：Android 12 及以下走 SCHEDULE_EXACT_ALARM（运行时引导授权），
-         Android 13+ 统一走 USE_EXACT_ALARM（本应用定时提醒为核心闹钟型用途，安装即授予）。
-         修正（2026-08-18 16:42 | 动画历史块权限修复）：对齐 Android 权限技能模板 4.1 写法，
+         Android 13+ 统一走 USE_EXACT_ALARM（本应用定时提醒为核心闹钟型用途，安装即授予）；
          SCHEDULE 声明加 maxSdkVersion=32，避免在新版本上过度声明 -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
-    <!-- 修正（2026-08-18 20:02 | 图片清晰度图标与转场动画修复）：启动器图标由
-         24dp 白色通知剪影(被启动器拉伸、无背景层)切换为标准自适应图标
-         （品牌绿渐变背景 + 白铃铛前景 + 安全区）；通知小图标 ic_notification
-         职责不变，仍用于状态栏 -->
     <application
         android:name=".NotifyApp"
         android:allowBackup="true"
@@ -75,7 +68,7 @@
 
         <!-- ===== Receiver 声明 ===== -->
 
-        <!-- 开机自启接收器（仅解锁后启动：锁屏直启阶段无法访问 CE 存储，修复 2026-08-16 | P7） -->
+        <!-- 开机自启接收器（仅解锁后启动：锁屏直启阶段无法访问 CE 存储） -->
         <receiver
             android:name=".receiver.BootReceiver"
             android:enabled="true"
@@ -86,7 +79,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 通知操作按钮接收器（复制、取消固定） -->
+        <!-- 通知操作按钮接收器（复制、取消固定、内联编辑回传） -->
         <receiver
             android:name=".receiver.NotificationActionReceiver"
             android:enabled="true"

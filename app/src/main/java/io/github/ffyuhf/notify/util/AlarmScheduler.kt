@@ -14,9 +14,6 @@ import java.util.Calendar
  *
  * 使用 AlarmManager 精确定时触发通知。
  * 支持一次性定时和重复（时/日/周/月/年）。
- *
- * 创建日期：2026-05-14
- * 作者：Cline
  */
 object AlarmScheduler {
 
@@ -41,7 +38,7 @@ object AlarmScheduler {
         // 检查精确闹钟权限（Android 12+）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (!alarmManager.canScheduleExactAlarms()) {
-                // 无精确闹钟权限，使用不精确闹钟
+                // 无精确闹钟权限，降级为不精确闹钟（setAndAllowWhileIdle）
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerTime,
@@ -51,7 +48,7 @@ object AlarmScheduler {
             }
         }
 
-        // 设置精确闹钟
+        // setExactAndAllowWhileIdle 确保在 Doze 模式下也能准时触发
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerTime,

@@ -22,30 +22,6 @@ import kotlinx.coroutines.withContext
  *
  * 封装通知的创建、更新、删除、恢复操作。
  * 所有通知栏交互均通过此工具类统一管理。
- *
- * 修复：sendNotification 改为 suspend 函数，移除 runBlocking 避免主线程阻塞导致闪退。
- * 优化（2026-08-16）：
- * - P1 巡检差异恢复：对比通知栏实际状态，仅重发缺失的固定通知
- * - P2 设置快照：批量发送复用单次 DataStore 读取结果
- * - P5 setOnlyAlertOnce：通知更新时不再重复响铃震动
- * - P6 通知栏ID唯一性校验：消除ID碰撞导致的通知互相覆盖
- * 修正（2026-08-16 18:02 | RemoteInput 可变性 + 发布容错）：
- * - 编辑 Action PendingIntent 改 FLAG_MUTABLE：Android 12+（API 31+）强制要求携带
- *   RemoteInput 的 Action 其 PendingIntent 必须可变，IMMUTABLE 会被系统拒绝发布
- *   （恢复失败与主线程崩溃循环的根因）
- * - notify() 包 runCatching 并返回 Boolean：发布失败记 ERROR 日志，不再击穿调用协程
- * 回退（2026-08-18 21:30 | 图标回退与历史交互修正）：
- * - 移除 sendNotification 的 setLargeIcon 与 getAppIconBitmap（原 2026-08-18 20:46
- *   修正引入）：真机（原生 Android 16）验证该方案仅使通知右侧多出软件图标
- *   （Android 12+ 模板大图标渲染于通知右侧），左侧白圆未修复且用户不接受右侧图标；
- *   通知头部左上角图标由 SystemUI 渲染应用图标，与应用通知代码无关，
- *   配套措施为启动器 mipmap 移除 monochrome 单色层（见启动器图标资源修正文档）
- * 修正（2026-08-18 22:22 | 多选指示与固定状态修正）：
- * - 标题为空不再回退软件名：Android 12+ 展开通知时 SystemUI 自动在通知头部
- *   显示应用名称，应用写入标题位属冗余；null 时标题行不渲染（与 Entity
- *   title 注释语义一致），折叠视图仅显示内容行
- *
- * 创建日期：2026-05-14 | 作者：Cline
  */
 object NotificationHelper {
 
@@ -54,12 +30,7 @@ object NotificationHelper {
     /** 复制操作 Action */
     const val ACTION_COPY = "io.github.ffyuhf.notify.ACTION_COPY"
 
-    /**
-     * 编辑操作 Action
-     *
-     * 改造（2026-08-16 | 通知栏内联编辑）：原为打开应用内编辑页（PendingIntent.getActivity），
-     * 现改为带 RemoteInput 的广播内联编辑（Shizuku 同款 Direct Reply 交互）。
-     */
+    /** 编辑操作 Action（触发通知栏 RemoteInput 内联编辑） */
     const val ACTION_EDIT = "io.github.ffyuhf.notify.ACTION_EDIT"
 
     /** 内联编辑回复 Action（RemoteInput 结果回传） */
@@ -85,20 +56,12 @@ object NotificationHelper {
      *
      * 根据通知实体和当前设置构建并显示通知。
      * 包含三层防删除保护：setOngoing + deleteIntent + 巡检差异恢复。
-     *
-     * 优化（2026-08-16 | P2）：settingsSnapshot 由调用方传入复用，
-     * 批量发送时整批仅读取一次 DataStore；传 null 时内部自行读取一次。
-     * 优化（2026-08-16 | P5）：setOnlyAlertOnce，通知更新不重复响铃震动。
-     * 修正（2026-08-16 15:39 | 图片通知闪退修复）：
-     * - 图片解码包 withContext(Dispatchers.IO)：原实现跟随调用方线程执行，
-     *   viewModelScope（主线程）发送大图时在主线程做磁盘 IO+位图解码，
-     *   为「发送图片后闪退」根因之三；现固定在 IO 线程解码
-     * - 解码失败/OOM 回退文本样式时记 WARN 日志（供分级别导出排查）
+     * 图片解码固定在 IO 线程执行；解码失败/OOM 回退文本样式并记 WARN 日志。
      *
      * @param context 上下文
      * @param entity 通知实体
-     * @param settingsSnapshot 设置快照（可选，批量场景复用）
-     * @param soundEnabled 是否响铃提醒（默认true；B10 重发场景按用户设置决定）
+     * @param settingsSnapshot 设置快照（可选，批量场景复用以减少 DataStore 读取次数）
+     * @param soundEnabled 是否响铃提醒（默认 true；重发场景由用户设置决定）
      * @return true 发布成功；false 发布失败（已记 ERROR 日志，用户主动路径需向用户提示）
      */
     suspend fun sendNotification(
@@ -109,7 +72,6 @@ object NotificationHelper {
     ): Boolean {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // 读取设置：优先使用调用方传入的快照，避免重复 DataStore IO（P2）
         val snapshot = settingsSnapshot ?: SettingsDataStore(context).getSnapshot()
 
         // 纯图通知（content 为空串）折叠视图/回退文本统一显示占位文案「[图片]」
@@ -117,10 +79,9 @@ object NotificationHelper {
             context.getString(R.string.image_only_notification)
         }
 
-        // 渠道按 soundEnabled 选择（修正 2026-08-16 | 重发响铃修复）：
-        // Android 8.0+（minSdk=26）通知声音/震动由渠道决定，setDefaults 无效；
-        // true → 响铃渠道（IMPORTANCE_HIGH），false → 静默渠道（IMPORTANCE_LOW，
-        // 无声音/震动/横幅，通知静默出现在通知栏）
+        // 渠道按 soundEnabled 选择：Android 8.0+（minSdk=26）通知声音/震动由渠道决定，
+        // setDefaults 无效；true → 响铃渠道（IMPORTANCE_HIGH），false → 静默渠道
+        // （IMPORTANCE_LOW，无声音/震动/横幅，通知静默出现在通知栏）
         val channelId = if (soundEnabled) {
             NotifyApp.CHANNEL_PINNED
         } else {
@@ -129,20 +90,18 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            // 标题为 null 不渲染标题行：展开态应用名由 SystemUI 显示于通知头部（2026-08-18 22:22）
+            // 标题为 null 不渲染标题行：展开态应用名由 SystemUI 显示于通知头部
             .setContentTitle(entity.title)
             .setContentText(displayContent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // 更新已存在的通知时不再响铃震动，仅首次发送提醒（P5）
+            // 更新已存在的通知时不再响铃震动，仅首次发送提醒
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
             // 第一层防护：设置通知为持续性（不可滑动删除）
             .setOngoing(entity.isPinned)
 
-        // 通知样式（新增 2026-08-16 | 图片通知）：
         // 有图且解码成功 → BigPictureStyle 大图优先（不受 multilineDisplay 限制）；
-        // 无图或解码失败 → 回退原 BigTextStyle/默认样式（内存受控解码防 OOM）
-        // 修正（2026-08-16 15:39）：解码固定在 IO 线程执行，不再跟随调用方线程
+        // 无图或解码失败 → 回退 BigTextStyle/默认样式（内存受控解码防 OOM）
         val imageBitmap = entity.imagePath?.let { path ->
             withContext(Dispatchers.IO) { ImageStorageHelper.decodeSampledBitmap(path) }
         }
@@ -150,7 +109,7 @@ object NotificationHelper {
             builder.setStyle(
                 NotificationCompat.BigPictureStyle()
                     .bigPicture(imageBitmap)
-                    // 大标题 null 不渲染，应用名由 SystemUI 头部显示（2026-08-18 22:22）
+                    // 大标题 null 不渲染，应用名由 SystemUI 头部显示
                     .setBigContentTitle(entity.title)
                     .setSummaryText(displayContent)
             )
@@ -163,7 +122,7 @@ object NotificationHelper {
                 builder.setStyle(
                     NotificationCompat.BigTextStyle()
                         .bigText(displayContent)
-                        // 大标题 null 不渲染，应用名由 SystemUI 头部显示（2026-08-18 22:22）
+                        // 大标题 null 不渲染，应用名由 SystemUI 头部显示
                         .setBigContentTitle(entity.title)
                 )
             }
@@ -205,10 +164,8 @@ object NotificationHelper {
             )
         }
 
-        // 编辑按钮（改造 2026-08-16 | 通知栏内联编辑）：
-        // 由 PendingIntent.getActivity 打开应用内编辑页，改为带 RemoteInput 的广播，
-        // 点击后在系统内联输入框直接编辑正文（Shizuku 同款交互）。
-        // requestCode 契约保持不变（notificationId*10+2）。
+        // 编辑按钮：带 RemoteInput 的广播，点击后在系统内联输入框直接编辑正文（Direct Reply）。
+        // requestCode 契约：notificationId*10+2。
         if (snapshot.showEditButton) {
             val remoteInput = RemoteInput.Builder(KEY_EDIT_CONTENT)
                 .setLabel(context.getString(R.string.edit_reply_label))
@@ -218,9 +175,8 @@ object NotificationHelper {
                 putExtra(EXTRA_NOTIFICATION_ID, entity.id)
                 putExtra(EXTRA_NOTIFICATION_BAR_ID, entity.notificationId)
             }
-            // 修正（2026-08-16 18:02 | RemoteInput 可变性）：FLAG_IMMUTABLE → FLAG_MUTABLE。
-            // Android 12+ 强制要求携带 RemoteInput 的 Action 其 PendingIntent 必须可变
-            // （系统触发时需向 Intent 回填用户输入），IMMUTABLE 会被系统以
+            // 携带 RemoteInput 的 Action 其 PendingIntent 必须 FLAG_MUTABLE：
+            // Android 12+ 系统触发时需向 Intent 回填用户输入，IMMUTABLE 会被系统以
             // "PendingIntents attached to actions with remote inputs must be mutable" 拒绝发布。
             val editPendingIntent = PendingIntent.getBroadcast(
                 context,
@@ -238,7 +194,6 @@ object NotificationHelper {
             builder.addAction(editAction)
         }
 
-        // 取消固定按钮
         if (snapshot.showUnpinButton && entity.isPinned) {
             val unpinIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = ACTION_UNPIN
@@ -260,10 +215,9 @@ object NotificationHelper {
 
         // 不设置 contentIntent：点击通知体无任何响应，仅按钮可操作
 
-        // 修正（2026-08-16 18:02 | 发布容错）：notify 包 runCatching 并向上返回发布结果。
-        // 非法通知配置（如 IMMUTABLE RemoteInput Action）会抛 IllegalArgumentException
-        // 击穿主线程协程导致应用崩溃循环；现失败记 ERROR 日志不外抛，
-        // 由调用方按返回值决定是否向用户提示（后台路径静默，用户主动路径 Toast）。
+        // notify 包 runCatching 并向上返回发布结果：非法通知配置会抛 IllegalArgumentException
+        // 击穿主线程协程；失败记 ERROR 日志不外抛，由调用方按返回值决定是否向用户提示
+        // （后台路径静默，用户主动路径 Toast）。
         val postResult = runCatching {
             notificationManager.notify(entity.notificationId, builder.build())
         }
@@ -297,20 +251,16 @@ object NotificationHelper {
     /**
      * 恢复固定通知（巡检差异恢复）
      *
-     * 优化（2026-08-16 | P1）：
-     * 原实现对所有固定通知无条件全量重发，与架构文档"对比缺失恢复"不符，
-     * 且造成重复提醒与耗电。现对比通知栏实际活跃通知，仅恢复缺失的。
+     * 对比通知栏实际活跃通知，仅恢复缺失的（避免全量重发造成重复提醒与耗电）。
+     * 恢复循环单条 runCatching 容错：单条异常（如图片 OOM）不中断整批、不击穿 serviceScope。
      *
      * @param context 上下文
      * @param restoreAll true 全量恢复（服务启动/开机首次恢复）；
      *                   false 差异恢复（巡检周期，仅重发通知栏中缺失的）
-     * 修正（2026-08-16 15:39 | 图片通知闪退修复）：恢复循环单条容错——
-     * 原实现单条异常（如图片 OOM）直接中断整批恢复并击穿 serviceScope 导致
-     * 进程崩溃（「启动即闪退」根因）；现单条 runCatching 隔离，失败记日志继续。
      */
     suspend fun restorePinnedNotifications(context: Context, restoreAll: Boolean = false) {
         val repository = NotificationRepository.getInstance(context)
-        // 整批复用同一份设置快照，仅读取一次 DataStore（P2）
+        // 整批复用同一份设置快照，仅读取一次 DataStore
         val snapshot = SettingsDataStore(context).getSnapshot()
         val activePinned = repository.getActivePinnedNotifications()
 
@@ -351,10 +301,7 @@ object NotificationHelper {
     }
 
     /**
-     * 生成不重复的通知栏ID
-     *
-     * 优化（2026-08-16 | P6）：原实现 1000 + count + (now % 10000) 存在碰撞可能，
-     * 碰撞会导致通知互相覆盖。现改用时间戳截断 + 数据库唯一性校验，冲突时递增重试。
+     * 生成不重复的通知栏ID（碰撞会导致通知互相覆盖）
      *
      * @param context 上下文
      * @return 唯一的通知栏ID

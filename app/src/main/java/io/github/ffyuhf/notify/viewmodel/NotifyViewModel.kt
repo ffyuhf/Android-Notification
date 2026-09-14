@@ -29,16 +29,9 @@ import kotlinx.coroutines.withContext
  * 主 ViewModel
  *
  * 管理通知的创建、发送、定时、历史记录和设置。
- * 作为 UI 层与数据层的桥梁。
- *
- * 创建日期：2026-05-14
- * 作者：Cline
- * 修改（2026-08-16 15:39 | 图片通知闪退修复与日志导出）：
- * - 关键链路（发送/定时/重发/删除）接入 AppLogger 埋点
- * - 新增 exportLog：设置页分级别导出日志（SAF CreateDocument 零权限）
- * 修改（2026-08-16 18:02 | RemoteInput 可变性修复）：
- * - 发送/重发按 sendNotification 返回结果分支提示：发布失败 Toast 告知用户
- * - 编辑更新失败时应用级 Toast 兜底（编辑页为独立 Activity 不消费 message 通道）
+ * 作为 UI 层与数据层的桥梁。关键链路接入 AppLogger 埋点；
+ * 发送/重发/编辑按 sendNotification 返回结果分支提示，发布失败 Toast 告知用户
+ * （编辑页为独立 Activity 不消费 message 通道，走应用级 Toast）。
  */
 class NotifyViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -62,14 +55,14 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     val allNotifications: StateFlow<List<NotificationEntity>> = repository.allNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // ===== 历史记录搜索（H3 新增 2026-08-16） =====
+    // ===== 历史记录搜索 =====
 
     /** 历史记录搜索关键词 */
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     /**
-     * 按关键词过滤后的历史记录（H3 新增）
+     * 按关键词过滤后的历史记录
      *
      * 匹配标题与内容，忽略大小写；关键词为空时返回全量。
      */
@@ -86,7 +79,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** 更新历史记录搜索关键词（H3） */
+    /** 更新历史记录搜索关键词 */
     fun setSearchQuery(value: String) {
         _searchQuery.value = value
     }
@@ -125,15 +118,14 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     val resendSoundEnabled: StateFlow<Boolean> = settings.resendSoundEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    /** 历史记录布局模式（H1 新增）：single单列 / two_column两列 */
+    /** 历史记录布局模式：single单列 / two_column两列 */
     val historyLayoutMode: StateFlow<String> = settings.historyLayoutMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "single")
 
     // ===== UI 状态 =====
 
     /**
-     * 操作结果消息（字符串资源ID，用于Toast）
-     * 优化（2026-08-16 | B5）：值改为资源ID，由UI层统一消费显示，原key字符串无消费者
+     * 操作结果消息（字符串资源ID，用于Toast），由 UI 层统一消费显示
      */
     private val _message = MutableStateFlow<Int?>(null)
     val message: StateFlow<Int?> = _message.asStateFlow()
@@ -146,7 +138,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      *
      * @param title 通知标题（可选）
      * @param content 通知内容（纯图通知传空串）
-     * @param imagePath 图片私有路径（可选；新增 2026-08-16 | 图片通知）
+     * @param imagePath 图片私有路径（可选）
      * @param isPinned 是否固定显示
      */
     fun sendNow(
@@ -197,7 +189,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
      *
      * @param title 通知标题（可选）
      * @param content 通知内容（纯图通知传空串）
-     * @param imagePath 图片私有路径（可选；新增 2026-08-16 | 图片通知）
+     * @param imagePath 图片私有路径（可选）
      * @param scheduledAt 定时触发时间戳（毫秒）
      * @param repeatType 重复类型（null/时/日/周/月/年）
      * @param isPinned 是否固定显示
@@ -221,16 +213,16 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
                 scheduledAt = scheduledAt,
                 repeatType = repeatType,
                 isPinned = isPinned,
-                // B9 修复：定时记录创建时为 isActive=false（未触发、不在通知栏），
+                // 定时记录创建时为 isActive=false（未触发、不在通知栏），
                 // 由 AlarmReceiver 到点触发后置为 true；避免被前台服务巡检
-                // 误判为"被删除的固定通知"而提前补发（设定19分18分提前出现）
+                // 误判为"被删除的固定通知"而提前补发
                 isActive = false,
                 notificationId = notificationId,
                 isAntiDeleteEnabled = true,
                 imagePath = imagePath
             )
 
-            // 保存到数据库并回填真实ID（修复 2026-08-16 | B1）：
+            // 保存到数据库并回填真实ID：
             // 原实现调度闹钟时使用未回填的 entity（id=0），
             // 触发时按 dbId=0 查库为空直接返回，定时通知永不发出
             val rowId = repository.insertNotification(entity)
@@ -251,13 +243,11 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 重新发送历史通知
      *
-     * 修复（2026-08-16 | B10）：原实现 copy(id=0) 插入新记录，导致历史记录重复累积。
-     * 现改为更新原记录而非插入，
+     * 更新原记录而非插入新记录（插入会导致历史记录重复累积），
      * 清空定时字段避免未触发定时记录被置为 isActive=true 后重新进入误发路径，
-     * 取消旧闹钟与旧通知，重新生成通知栏ID以响铃提醒（D3），
-     * 并启动前台保活服务与"立即发送"行为对齐（D4）。
-     * 修正（2026-08-21 20:41 | 历史重发时间保持）：重发不再刷新 createdAt，
-     * 历史时间与列表位置保持最初发送时的状态（取代 B10 的置顶设计）。
+     * 取消旧闹钟与旧通知，重新生成通知栏ID以响铃提醒，
+     * 并启动前台保活服务与"立即发送"行为对齐。
+     * 重发不刷新 createdAt：历史时间与列表位置保持最初发送时的状态。
      *
      * @param entity 历史通知实体
      */
@@ -268,7 +258,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 批量重新发送历史通知（H2 新增，多选发送使用）
+     * 批量重新发送历史通知（多选发送使用）
      *
      * 逐条按现有 resend 链路执行：取消旧闹钟/旧通知 → 新通知栏ID → 更新原记录（保持原时间） → 发送。
      *
@@ -281,15 +271,14 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 单条重发核心链路（H2 抽取，单条与批量共用）
+     * 单条重发核心链路（单条与批量共用）
      *
-     * 修正（2026-08-21 20:41 | 历史重发时间保持）：不再刷新 createdAt，
-     * 历史记录时间与列表位置始终保持最初点击发送时的状态。
+     * 不刷新 createdAt：历史记录时间与列表位置始终保持最初点击发送时的状态。
      *
      * @param entity 历史通知实体
      */
     private suspend fun resendNotificationInternal(entity: NotificationEntity) {
-        // 取消可能残留的定时闹钟与通知栏旧 ID 通知（B11 清理逻辑复用）
+        // 取消可能残留的定时闹钟与通知栏旧 ID 通知
         cancelNotificationSideEffects(entity)
 
         // 生成新通知栏ID：新 ID 首次发布可响铃提醒，不受 setOnlyAlertOnce 静默影响
@@ -316,7 +305,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
             soundEnabled = snapshot.resendSoundEnabled
         )
 
-        // 与"立即发送"行为对齐：启动前台保活服务（D4）
+        // 与"立即发送"行为对齐：启动前台保活服务
         NotifyForegroundService.start(context)
 
         _message.value =
@@ -325,9 +314,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 删除前清理该记录的通知栏通知与残留定时闹钟（B11 新增）
+     * 删除前清理该记录的通知栏通知与残留定时闹钟
      *
-     * 修复（2026-08-16 12:51 | B11）：原删除仅删库，通知栏残留、闹钟仍触发。
      * 两清理方法均幂等，对已不存在/未设置的 ID 无副作用。
      *
      * @param entity 待删除的通知实体
@@ -340,9 +328,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 删除历史通知记录
      *
-     * 优化（2026-08-16 12:51 | B11）：删除前先清理该记录的通知栏通知与残留闹钟，
-     * 避免删库后通知栏残留、定时闹钟仍触发。
-     * 优化（2026-08-16 | 图片通知）：删除后同步清理私有目录图片文件，防存储泄漏。
+     * 删除前先清理该记录的通知栏通知与残留闹钟（避免删库后通知栏残留、
+     * 定时闹钟仍触发）；删除后同步清理私有目录图片文件，防存储泄漏。
      *
      * @param id 数据库ID
      */
@@ -358,10 +345,10 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 批量删除历史通知记录（H2 新增，多选删除使用）
+     * 批量删除历史通知记录（多选删除使用）
      *
-     * 删除前逐条清理通知栏通知与残留闹钟（B11 链路）；
-     * 删除后逐条清理私有目录图片文件（图片通知）。
+     * 删除前逐条清理通知栏通知与残留闹钟；
+     * 删除后逐条清理私有目录图片文件。
      *
      * @param ids 数据库主键ID集合
      */
@@ -377,8 +364,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 清空所有历史记录
      *
-     * 优化（2026-08-16 12:51 | B11）：清空前逐条清理通知栏通知与残留闹钟；
-     * 清空后逐条清理私有目录图片文件（图片通知）。
+     * 清空前逐条清理通知栏通知与残留闹钟；清空后逐条清理私有目录图片文件。
      */
     fun deleteAllNotifications() {
         viewModelScope.launch {
@@ -405,8 +391,8 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 更新通知内容（应用内编辑页，支持图片）
      *
-     * 改造（2026-08-16 | 图片通知）：改用全量实体更新（updateNotification），
-     * 支持同步写入/移除图片路径；imagePath 传 null 即移除图片。
+     * 全量实体更新（updateNotification），支持同步写入/移除图片路径；
+     * imagePath 传 null 即移除图片。
      * 通知栏内联编辑（仅正文）仍走 repository.updateContent 链路，不受影响。
      *
      * @param id 数据库ID
@@ -448,8 +434,7 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 按ID加载通知记录
      *
-     * 供编辑页读取通知数据（优化 2026-08-16 | U5）：
-     * 原编辑页直接访问 Repository 越过 ViewModel，违反 MVVM 分层。
+     * 供编辑页读取通知数据（编辑页不直访 Repository，保持 MVVM 分层）。
      *
      * @param id 数据库ID
      * @return 通知实体，不存在返回null
@@ -484,13 +469,11 @@ class NotifyViewModel(application: Application) : AndroidViewModel(application) 
     /** 设置历史重发是否响铃提醒 */
     fun setResendSoundEnabled(value: Boolean) { viewModelScope.launch { settings.setResendSoundEnabled(value) } }
 
-    /** 设置历史记录布局模式（H1）："single"单列, "two_column"两列 */
+    /** 设置历史记录布局模式："single"单列, "two_column"两列 */
     fun setHistoryLayoutMode(value: String) { viewModelScope.launch { settings.setHistoryLayoutMode(value) } }
 
     /**
      * 导出日志到用户指定的文件 URI（设置页日志导出入口）
-     *
-     * 新增（2026-08-16 15:39 | 图片通知闪退修复与日志导出）
      *
      * 实现思路：SAF CreateDocument 返回的 URI 经 contentResolver 输出流写入，
      * 零运行时权限；读取与写入均在 IO 线程，结果经 message 状态由 UI 层 Toast。

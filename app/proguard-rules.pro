@@ -1,6 +1,4 @@
 # ProGuard/R8 混淆规则
-# Android 通知应用（新建 2026-08-16 10:45 | B8）
-# 修复：build.gradle.kts 引用本文件但此前不存在，导致 release 构建失败
 
 # ===== Room =====
 # Room 生成的实现类与实体通过反射访问，保留必要结构

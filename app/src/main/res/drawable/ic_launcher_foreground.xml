@@ -3,7 +3,6 @@
 <!-- 自适应图标 108dp 画布中系统遮罩仅保留中心约 66dp，前景内容须留足边距； -->
 <!-- 铃铛 path 源自通知小图标(24 viewport)，group 放大 2 倍(48dp)并平移居中： -->
 <!-- 48dp 内容 < 66dp 安全区，任何遮罩形状（圆/方/圆角方）均不裁切 -->
-<!-- 新增（2026-08-18 20:02 | 图片清晰度图标与转场动画修复） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

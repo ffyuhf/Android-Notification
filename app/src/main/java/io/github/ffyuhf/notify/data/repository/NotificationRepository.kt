@@ -11,9 +11,6 @@ import kotlinx.coroutines.flow.Flow
  *
  * 封装 Room DAO 操作，提供统一的数据访问接口。
  * ViewModel 通过此仓库访问数据层，实现关注点分离。
- *
- * 创建日期：2026-05-14
- * 作者：Cline
  */
 class NotificationRepository private constructor(context: Context) {
 
@@ -55,7 +52,7 @@ class NotificationRepository private constructor(context: Context) {
     }
 
     /**
-     * 批量删除通知记录（H2 新增，多选删除使用）
+     * 批量删除通知记录（多选删除使用）
      *
      * @param ids 数据库主键ID集合
      */
@@ -122,7 +119,7 @@ class NotificationRepository private constructor(context: Context) {
 
     /**
      * 将通知标记为活跃
-     * 定时通知触发后调用，纳入防删除三层保护（B9 修复）
+     * 定时通知触发后调用，纳入防删除三层保护
      *
      * @param id 数据库主键ID
      */
@@ -135,7 +132,6 @@ class NotificationRepository private constructor(context: Context) {
      *
      * 重复通知触发后回写下次触发时间，作为下次周期计算基准，
      * 避免以系统当前时间为基准导致的累积漂移。
-     * 修复（2026-08-16 10:40 | B6）
      *
      * @param id 数据库主键ID
      * @param scheduledAt 下一次触发时间戳（毫秒）
@@ -168,7 +164,7 @@ class NotificationRepository private constructor(context: Context) {
 
     /**
      * 判断通知栏ID是否已被占用
-     * 生成通知栏ID时的唯一性校验（优化 2026-08-16 | P6）
+     * 生成通知栏ID时的唯一性校验
      *
      * @param notificationId 通知栏ID
      * @return true表示已存在

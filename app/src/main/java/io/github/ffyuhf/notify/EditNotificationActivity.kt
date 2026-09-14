@@ -57,22 +57,8 @@ import kotlinx.coroutines.withContext
 /**
  * 编辑通知 Activity
  *
- * 从通知栏的编辑按钮启动，允许用户修改通知内容。
- * 保存后通知栏实时更新。
- *
- * 优化（2026-08-16）：
- * - B4 改继承 AppCompatActivity，支持 per-app 语言切换
- * - U5 通知数据改经 ViewModel 加载（原直访 Repository 违反 MVVM 分层）
- * 修正（2026-08-16 19:15 | 编辑页图片布局修复）：
- * - 内容 Column 加 verticalScroll，输入框 weight 改 heightIn(min=120dp)，
- *   修复有图时自适应图片（最高320dp）将输入框压缩至高度0无法输入的问题
- * MD3 重绘（2026-08-18 16:00 | 界面MD3全面重绘）：
- * - 顶栏配色/输入框圆角与首页统一（P10），可滚动编辑表单契约保持
- * 修正（2026-08-18 21:30 | 图标回退与历史交互修正）：
- * - 图片预览与内容输入框之间、图片与更换/移除按钮行之间补间距（原完全贴合）
- *
- * 创建日期：2026-05-14
- * 作者：Cline
+ * 从历史记录进入，允许用户修改通知标题、正文与图片。
+ * 保存后通知栏实时更新。通知数据经 ViewModel 加载（MVVM 分层）。
  */
 class EditNotificationActivity : AppCompatActivity() {
 
@@ -115,7 +101,7 @@ private fun EditNotificationContent(
     var content by remember { mutableStateOf("") }
     var imagePath by remember { mutableStateOf<String?>(null) }
 
-    // 首次加载时经 ViewModel 读取通知数据（U5：避免直访 Repository 违反分层）
+    // 首次加载时经 ViewModel 读取通知数据（避免直访 Repository 违反分层）
     LaunchedEffect(notificationId) {
         if (notificationId != -1) {
             viewModel.loadNotification(notificationId)?.let {
@@ -126,8 +112,8 @@ private fun EditNotificationContent(
         }
     }
 
-    // 图片选择（新增 2026-08-16 | 图片通知）：系统照片选择器零权限，
-    // 选图后复制到私有目录持久化（替换旧图时清理旧文件）
+    // 图片选择：系统照片选择器（Photo Picker）零权限，选图后复制到
+    // 私有目录持久化（替换旧图时清理旧文件）
     val scope = rememberCoroutineScope()
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -157,7 +143,7 @@ private fun EditNotificationContent(
                         )
                     }
                 },
-                // MD3 重绘：顶栏配色与三页统一
+                // 顶栏配色与三页统一
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -169,12 +155,11 @@ private fun EditNotificationContent(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
-                // 修正（2026-08-16 19:15 | 编辑页图片布局修复）：加滚动，
-                // 有图时自适应图片（最高320dp）会压缩 weight 输入框至高度0无法输入；
-                // 滚动后图片/输入框/按钮在超屏时均可滚动到达
+                // 可滚动：有图时自适应图片（最高320dp）会压缩弹性输入框至高度0
+                // 无法输入；滚动后图片/输入框/按钮在超屏时均可到达
                 .verticalScroll(rememberScrollState())
         ) {
-            // 标题输入（MD3 重绘：圆角与首页输入区统一）
+            // 标题输入
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -186,9 +171,8 @@ private fun EditNotificationContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 内容输入
-            // 修正（2026-08-16 19:15 | 编辑页图片布局修复）：滚动容器内 weight 无意义，
-            // 且被上方自适应图片（最高320dp）压缩至高度0；改 heightIn 保证最小输入区
+            // 内容输入：滚动容器内 weight 无意义且会被上方自适应图片压缩至
+            // 高度0，用 heightIn 保证最小输入区
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
@@ -200,23 +184,18 @@ private fun EditNotificationContent(
                 shape = MaterialTheme.shapes.medium
             )
 
-            // 图片编辑区域（新增 2026-08-16 | 图片通知）
             if (imagePath != null) {
-                // 图片与内容输入框分隔（修正 2026-08-18 21:30 | 图标回退与历史交互修正）：
-                // 原图片完全贴合在内容输入框下侧，补间距保证视觉分隔
+                // 图片与内容输入框分隔
                 Spacer(modifier = Modifier.height(12.dp))
-                // 当前图片预览
-                // 修正（2026-08-16 18:35 | 图片显示自适应修复）：固定高度 + Crop 裁剪
-                // 会截短图片，改按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏）
-                // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
-                // 组件自动按显示区物理像素 1:1 解码（视觉原图）
+                // 图片预览：按图片宽高比自适应高度完整显示（限高 320dp 防长图占屏），
+                // 按显示区物理像素 1:1 解码（视觉原图）
                 AdaptiveImage(
                     path = imagePath,
                     maxHeight = 320.dp,
                     cornerRadius = 12.dp,
                     contentDescription = stringResource(R.string.action_add_image)
                 )
-                // 图片与按钮行分隔（修正 2026-08-18 21:30）：避免图片贴合操作按钮
+                // 图片与按钮行分隔
                 Spacer(modifier = Modifier.height(8.dp))
                 // 更换 / 移除图片
                 Row(

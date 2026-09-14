@@ -80,28 +80,19 @@ import java.util.TimeZone
  * 2. 即时发送按钮
  * 3. 定时发送（ModalBottomSheet + MD3 日期时间选择器 + 重复类型）
  *
- * MD3 重绘（2026-08-18 15:54 | 界面MD3全面重绘）：
- * - P1 增设 TopAppBar 与历史/设置页统一顶部骨架，移除大标题文字与 statusBarsPadding
- *   手动补偿（顶栏自带状态栏 inset）
- * - P2 定时设置由内联条件展开区块改为 ModalBottomSheet，消除与操作按钮行的层级混乱
- * - P3 View 体系 DatePickerDialog/TimePickerDialog 替换为 material3 DatePickerDialog +
- *   TimePicker（AlertDialog 包装），风格统一
- *
- * 逻辑保持（未变更）：
- * - U1 精确闹钟权限惰性引导：定时确认时检查权限，无权限才提示并跳转设置页
- * - U3 输入状态 rememberSaveable：切换Tab后输入内容保留
- * - U4 定时时间未来校验：过去时间不可提交并提示
+ * 行为契约：
+ * - 精确闹钟权限惰性引导：定时确认时检查权限，无权限才提示并跳转设置页
+ * - 输入状态 rememberSaveable：切换 Tab 后输入内容保留
+ * - 定时时间未来校验：过去时间不可提交并提示
  * - 纯图通知支持：正文与图片至少一项即可发送
  * - 图片完整显示契约：预览经 AdaptiveImage 自适应完整显示（限高 320dp）
- *
- * 创建日期：2026-05-14 | 作者：Cline
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: NotifyViewModel) {
     val context = LocalContext.current
 
-    // 输入状态（rememberSaveable：切Tab后保留，U3）
+    // 输入状态（rememberSaveable：切Tab后保留）
     var title by rememberSaveable { mutableStateOf("") }
     var content by rememberSaveable { mutableStateOf("") }
 
@@ -142,14 +133,14 @@ fun HomeScreen(viewModel: NotifyViewModel) {
         imagePath = null
     }
 
-    // ===== 定时发送状态（rememberSaveable：切Tab后保留，U3）=====
-    /** 定时设置 BottomSheet 显隐（MD3 重绘：原内联展开区改 Sheet 承载） */
+    // ===== 定时发送状态（rememberSaveable：切Tab后保留）=====
+    /** 定时设置 BottomSheet 显隐 */
     var showScheduleSheet by rememberSaveable { mutableStateOf(false) }
     var scheduledTime by rememberSaveable { mutableLongStateOf(0L) }
     var scheduledTimeText by rememberSaveable { mutableStateOf("") }
     var repeatType by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // 定时时间未来校验（U4）：已选择且不晚于当前时间视为无效
+    // 定时时间未来校验：已选择且不晚于当前时间视为无效
     val isScheduledTimeValid = scheduledTime > System.currentTimeMillis()
     val showPastTimeError = scheduledTime > 0L && !isScheduledTimeValid
 
@@ -165,7 +156,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
     val repeatLabel = repeatOptions.find { it.second == repeatType }?.first
         ?: stringResource(R.string.repeat_none)
 
-    // ===== 定时确认链路（2026-08-18 16:43 | 对齐 Android 权限技能模板 4.6.4）=====
+    // ===== 定时确认链路 =====
     /** 权限引导期间挂起的定时提交标记：设置页返回且已授权则自动续跑提交 */
     var pendingScheduleConfirm by remember { mutableStateOf(false) }
 
@@ -205,7 +196,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
         }
     }
 
-    // ===== 统一骨架：TopAppBar 与历史/设置页一致（P1）=====
+    // ===== 统一骨架：TopAppBar 与历史/设置页一致 =====
     Scaffold(
         topBar = {
             TopAppBar(
@@ -248,9 +239,8 @@ fun HomeScreen(viewModel: NotifyViewModel) {
 
             // ===== 图片选择区 =====
             if (imagePath != null) {
-                // 已选图片：预览（AdaptiveImage 契约：按图比例自适应完整显示，限高 320dp）
-                // 调整（2026-08-18 20:00 | 图片清晰度修复）：移除硬编码解码目标，
-                // 组件自动按显示区物理像素 1:1 解码（视觉原图）
+                // 已选图片预览：按图比例自适应完整显示（限高 320dp），
+                // 按显示区物理像素 1:1 解码（视觉原图）
                 AdaptiveImage(
                     path = imagePath,
                     maxHeight = 320.dp,
@@ -313,7 +303,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
                     Text(stringResource(R.string.btn_send_now))
                 }
 
-                // 定时发送（次操作：打开 BottomSheet 配置定时，P2）
+                // 定时发送（次操作：打开 BottomSheet 配置定时）
                 FilledTonalButton(
                     onClick = { showScheduleSheet = true },
                     modifier = Modifier.weight(1f),
@@ -330,7 +320,7 @@ fun HomeScreen(viewModel: NotifyViewModel) {
         }
     }
 
-    // ===== 定时发送 ModalBottomSheet（P2：原内联展开区迁入，逻辑不变）=====
+    // ===== 定时发送 ModalBottomSheet =====
     if (showScheduleSheet) {
         ScheduleBottomSheet(
             scheduledTimeText = scheduledTimeText,
@@ -344,9 +334,8 @@ fun HomeScreen(viewModel: NotifyViewModel) {
                 scheduledTimeText = timeText
             },
             onConfirm = {
-                // 精确闹钟权限惰性检查（U1）：具备权限且输入合法才提交定时。
-                // 修正（2026-08-18 16:43 | 对齐权限技能模板 4.6.4）：无权限时不再
-                // 单向 Toast+跳设置，改为挂起提交标记 → 跳设置 → 返回重检，
+                // 精确闹钟权限惰性检查：具备权限且输入合法才提交定时。
+                // 无权限时挂起提交标记 → 跳设置 → 返回重检，
                 // 已授权自动续跑提交，仍无权限 Toast 明确告知未创建
                 if (!isValidInput || !isScheduledTimeValid) {
                     // 输入不合法（确认按钮已按条件禁用，此处防御性兜底不动作）
@@ -370,13 +359,12 @@ fun HomeScreen(viewModel: NotifyViewModel) {
 }
 
 /**
- * 定时发送设置 BottomSheet（MD3 重绘 2026-08-18 | P2/P3）
+ * 定时发送设置 BottomSheet
  *
- * 结构：日期时间选择（MD3 DatePickerDialog → TimePicker 级联）+ 重复类型下拉 + 确认按钮。
- * 原 View 体系日期时间对话框整体替换为 material3 组件，选择流程保持级联等价。
+ * 结构：日期时间选择（material3 DatePickerDialog → TimePicker 级联）+ 重复类型下拉 + 确认按钮。
  *
  * @param scheduledTimeText 已选定时时间显示文本（空串表示未选）
- * @param isScheduledTimeValid 定时时间是否在未来（U4）
+ * @param isScheduledTimeValid 定时时间是否在未来
  * @param showPastTimeError 是否显示过去时间错误提示
  * @param repeatOptions 重复类型选项（文案 → 类型值，null = 不重复）
  * @param repeatLabel 当前重复类型显示文案
@@ -398,11 +386,11 @@ private fun ScheduleBottomSheet(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 日期选择状态：初始选中当天（MD3 DatePicker）
+    // 日期选择状态：初始选中当天
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = System.currentTimeMillis()
     )
-    // 时间选择状态：默认当前时刻（MD3 TimePicker，24 小时制）
+    // 时间选择状态：默认当前时刻（24 小时制）
     val timePickerState = rememberTimePickerState(is24Hour = true)
 
     /** 日期选择对话框显隐（级联第一步） */
@@ -442,7 +430,7 @@ private fun ScheduleBottomSheet(
                 )
             }
 
-            // 定时时间无效提示（U4）
+            // 定时时间无效提示
             if (showPastTimeError) {
                 Text(
                     text = stringResource(R.string.error_schedule_past_time),
@@ -451,7 +439,7 @@ private fun ScheduleBottomSheet(
                 )
             }
 
-            // 重复类型选择（MD3 ExposedDropdownMenu）
+            // 重复类型选择（ExposedDropdownMenu 下拉）
             var repeatExpanded by rememberSaveable { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = repeatExpanded,
@@ -485,7 +473,7 @@ private fun ScheduleBottomSheet(
                 }
             }
 
-            // 确认按钮（时间必须已选且在未来，U4）
+            // 确认按钮（时间必须已选且在未来）
             Button(
                 onClick = onConfirm,
                 modifier = Modifier.fillMaxWidth(),
@@ -496,7 +484,7 @@ private fun ScheduleBottomSheet(
         }
     }
 
-    // ===== 级联第一步：MD3 日期选择对话框（替换 View 体系 DatePickerDialog）=====
+    // ===== 级联第一步：日期选择对话框 =====
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -522,7 +510,7 @@ private fun ScheduleBottomSheet(
         }
     }
 
-    // ===== 级联第二步：MD3 时间选择（AlertDialog 包装 TimePicker，material3 无独立对话框组件）=====
+    // ===== 级联第二步：时间选择（AlertDialog 包装 TimePicker，material3 无独立对话框组件）=====
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -585,7 +573,7 @@ private fun utcMillisToLocalCalendar(utcMillis: Long): Calendar {
 }
 
 /**
- * 是否具备精确闹钟能力（重构 2026-08-18 16:43 | 对齐权限技能模板 4.6.4）
+ * 是否具备精确闹钟能力
  *
  * 原 ensureExactAlarmPermission 将「检测」与「跳设置引导」耦合在普通函数中，
  * 无法感知设置页返回；现拆分为纯检测函数，引导跳转与返回重检由

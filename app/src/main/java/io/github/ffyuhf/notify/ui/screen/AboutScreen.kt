@@ -52,21 +52,21 @@ private const val PROJECT_URL = "https://github.com/ffyuhf/Android-Notification"
 /** 问题反馈页地址（GitHub Issues） */
 private const val ISSUES_URL = "https://github.com/ffyuhf/Android-Notification/issues"
 
-/** GPL-3.0 许可证页（GitHub 仓库许可证标签页，用户指定链接） */
+/** GPL-3.0 许可证页（GitHub 仓库许可证标签页） */
 private const val GPL_LICENSE_URL =
     "https://github.com/ffyuhf/Android-Notification?tab=GPL-3.0-1-ov-file#"
 
 /**
- * 关于与反馈页面（新增 2026-08-18 23:21 | 历史块边缘与关于反馈页）
+ * 关于与反馈页面
  *
  * 独立二级页面（MainActivity 页状态 3）：底栏收起、顶栏返回箭头，
  * 转场复用全局 AnimatedContent 方向感知水平滑动（设置页→关于页右滑前进）。
  *
  * 内容：
  * 1. 软件图标（启动器背景渐变 + 前景白铃铛矢量组合还原）+ 应用名 + 版本号
- * 2. 发送反馈 → GitHub Issues 页面（用户已确认）
+ * 2. 发送反馈 → GitHub Issues 页面
  * 3. 分享应用 → 系统 ACTION_SEND 分享面板（文本 = 应用名 + 项目地址）
- * 4. 开源许可证 → GPL-3.0 标识，跳转 GitHub 仓库许可证标签页（用户指定链接）
+ * 4. 开源许可证 → GPL-3.0 标识，跳转 GitHub 仓库许可证标签页
  * 5. 项目地址 → GitHub 仓库，浏览器打开
  *
  * @param onBack 返回回调（顶栏返回箭头 / 系统返回手势 / 返回键统一触发）
@@ -152,16 +152,13 @@ fun AboutScreen(onBack: () -> Unit) {
 }
 
 /**
- * 应用图标展示（新增 2026-08-18 23:21）
+ * 应用图标展示
  *
- * 修正（2026-08-19 14:45 | 关于图标与历史二级菜单）：
- * 1. 遮罩外形：22dp 圆角方 → 圆形，与用户启动器圆形图标外形一致
- * 2. 前景比例：原 108dp 画布整体缩至 96dp 全幅显示，铃铛仅占 44.4%；
- *    而启动器仅渲染画布中心 72dp 安全区（铃铛占显示尺寸 66.7%），
- *    铃铛视觉偏小约 1/3。现画布放大至 144dp（= 96 × 108/72）居中
- *    放置，经 96dp 圆形中心裁剪等效启动器安全区渲染，铃铛（放大后
- *    64dp < 96dp 直径）完整显示且比例与启动器严格一致
- *    （mipmap 自适应图标 xml 无法直接 painterResource，故按图层组合绘制）。
+ * 遮罩外形为圆形，与启动器圆形图标外形一致；前景比例与启动器渲染对齐：
+ * 启动器仅渲染画布中心 72dp 安全区（铃铛占显示尺寸 66.7%），故画布放大至
+ * 144dp（= 96 × 108/72）居中放置，经 96dp 圆形中心裁剪等效启动器安全区渲染，
+ * 铃铛（放大后 64dp < 96dp 直径）完整显示且比例与启动器严格一致
+ * （mipmap 自适应图标 xml 无法直接 painterResource，故按图层组合绘制）。
  */
 @Composable
 private fun AboutAppIcon() {

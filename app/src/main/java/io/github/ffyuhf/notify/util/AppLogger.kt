@@ -21,8 +21,6 @@ import java.util.concurrent.Executors
  * - 单线程 executor 串行追加写，调用方（含主线程埋点）仅入队，非阻塞
  * - 行格式固定 "MM-dd HH:mm:ss.SSS L/Tag: message"，级别字符位于行首第 20 列，
  *   readForExport 依据该列过滤级别；无法解析级别的续行（堆栈行）跟随上一行决策
- *
- * 新增（2026-08-16 15:39 | 图片通知闪退修复与日志导出）
  */
 object AppLogger {
 
@@ -189,9 +187,7 @@ object AppLogger {
         if (file.length() <= MAX_FILE_BYTES) return
 
         val bytes = file.readBytes()
-        // 整改（2026-08-16 16:07 | CI 编译失败）：KEEP_TAIL_BYTES 为 Long，
-        // 原表达式使 cutIndex 推断为 Long，数组索引/copyOfRange 需要 Int；
-        // 先转 Int 再参与下标运算（1MB 在 Int 范围内）
+        // KEEP_TAIL_BYTES 为 Long，需先转 Int 再参与数组下标运算（1MB 在 Int 范围内）
         val cutIndex = (bytes.size - KEEP_TAIL_BYTES.toInt()).coerceAtLeast(0)
         // 向后查找首个换行符，从下一行行首开始保留
         var lineStart = cutIndex

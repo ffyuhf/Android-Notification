@@ -13,13 +13,7 @@ import io.github.ffyuhf.notify.data.db.entity.NotificationEntity
  * Room 数据库定义
  *
  * 提供单例访问模式，确保全局只使用一个数据库实例。
- * 当前版本：2
- *
- * 创建日期：2026-05-14
- * 作者：Cline
- *
- * 新增（2026-08-16 | 图片通知）：version 1→2 增加 imagePath 列（ALTER TABLE，
- * 仅增可空列、无数据改写，历史记录完好无损）。
+ * 当前版本：2（version 1→2 经 ALTER TABLE 增加 imagePath 可空列，历史数据完整保留）。
  */
 @Database(
     entities = [NotificationEntity::class],
@@ -38,9 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * 数据库迁移：version 1 → 2
          *
-         * 图片通知功能（2026-08-16）：为 notifications 表增加 imagePath 可空列，
-         * 存储图片在应用私有目录中的路径。仅 ADD COLUMN，无数据改写，
-         * 老版本数据升级后完整保留。
+         * 为 notifications 表增加 imagePath 可空列，存储图片在应用私有目录中的路径。
+         * 仅 ADD COLUMN，无数据改写，老版本数据升级后完整保留。
          */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -66,12 +59,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                    // 修复（2026-08-16 | P4）：移除 allowMainThreadQueries。
-                    // 该调用与注释意图相反——它允许主线程查询而非禁止，
-                    // 主线程访问数据库会造成 UI 卡顿甚至 ANR。
-                    // 当前全部 DAO 访问均在协程 Dispatchers.IO 中执行。
-                    // 正式迁移（2026-08-16）：MIGRATION_1_2 保留用户历史数据；
-                    // fallbackToDestructiveMigration 仅作为兜底（未知版本差异时重建）
+                    // 不启用 allowMainThreadQueries：主线程访问数据库会造成 UI 卡顿甚至 ANR，
+                    // 全部 DAO 访问须在协程 Dispatchers.IO 中执行。
+                    // fallbackToDestructiveMigration 仅作未知版本差异时的兜底重建。
                     .addMigrations(MIGRATION_1_2)
                     .fallbackToDestructiveMigration()
                     .build()

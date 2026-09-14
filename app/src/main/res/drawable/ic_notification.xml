@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 通知小图标（状态栏显示） -->
-<!-- 修正（2026-08-18 20:46 | 通知图标全白修复）：移除 android:tint="#FFFFFF"—— -->
-<!-- 部分 ROM 会按原始 tint 渲染通知小图标，导致浅色通知栏下白色图标不可见； -->
-<!-- 规范做法为纯 alpha 剪影（fillColor 保持白色），由系统按渠道色自动着色 -->
+<!-- 通知小图标（状态栏显示）：纯 alpha 剪影（fillColor 白色、不带 tint），
+     由系统按渠道色自动着色——携带 android:tint 时部分 ROM 按原始 tint 渲染，
+     浅色通知栏下白色图标不可见 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

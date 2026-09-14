@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 英语字符串资源（默认） -->
-<!-- 创建日期：2026-05-14 | 作者：Cline -->
 <resources>
     <!-- ===== 应用信息 ===== -->
     <string name="app_name">Notify</string>
@@ -40,7 +39,7 @@
     <string name="btn_resend">Resend</string>
     <string name="btn_delete">Delete</string>
 
-    <!-- ===== 历史记录增强（2026-08-16 | H1/H2/H3） ===== -->
+    <!-- ===== 历史记录（搜索/多选/布局切换） ===== -->
     <string name="history_search">Search</string>
     <string name="history_search_hint">Search title or content</string>
     <string name="history_search_clear">Clear search</string>
@@ -82,7 +81,7 @@
     <string name="language_english">English</string>
 
     <!-- ===== 通知渠道 ===== -->
-    <!-- 静默渠道文案（2026-08-16 | 重发响铃修复）：重发响铃开关关闭时的发布渠道 -->
+    <!-- 静默渠道：重发响铃开关关闭时的发布渠道 -->
     <string name="notification_channel_pinned">Pinned Notifications</string>
     <string name="notification_channel_pinned_desc">Persistent pinned notifications</string>
     <string name="notification_channel_pinned_silent">Pinned Notifications (Silent)</string>
@@ -93,8 +92,7 @@
     <!-- ===== 权限提示 ===== -->
     <string name="permission_notification_denied">Notification permission denied. Please enable it in Settings.</string>
     <string name="permission_exact_alarm_needed">Exact alarm permission is required for scheduled notifications. Granting it in Settings.</string>
-    <!-- 新增（2026-08-18 16:41 | 动画历史块权限修复）：权限申请对齐 Android 权限技能模板，
-         通知权限三分支回调（rationale 说明 / 永久拒绝跳设置）与精确闹钟返回重检所需文案 -->
+    <!-- 通知权限三分支回调（rationale 说明 / 永久拒绝跳设置）与精确闹钟返回重检所需文案 -->
     <string name="permission_notification_rationale_title">Notification Permission Needed</string>
     <string name="permission_notification_rationale_desc">Notification permission is required to display, pin and restore your notifications. Denying it means notifications cannot be shown.</string>
     <string name="permission_request_again">Request Again</string>
@@ -102,7 +100,7 @@
     <string name="permission_notification_permanently_denied">Notification permission is permanently denied. Please enable it in Settings.</string>
     <string name="permission_exact_alarm_denied">Exact alarm permission not granted. Scheduled notification was not created.</string>
 
-    <!-- ===== 权限设置入口（2026-08-16 | U1/U2） ===== -->
+    <!-- ===== 权限设置入口 ===== -->
     <string name="settings_permissions">Permissions</string>
     <string name="settings_notification_permission">Notification Permission</string>
     <string name="settings_notification_permission_desc">Required to display notifications</string>
@@ -112,23 +110,23 @@
     <string name="status_granted">Granted</string>
     <string name="status_not_granted">Not granted</string>
 
-    <!-- ===== 定时校验（2026-08-16 | U4） ===== -->
+    <!-- ===== 定时校验 ===== -->
     <string name="error_schedule_past_time">Scheduled time must be in the future</string>
 
-    <!-- ===== MD3 重绘（2026-08-18）：日期时间选择与历史卡片状态 ===== -->
+    <!-- ===== 日期时间选择与历史卡片状态 ===== -->
     <string name="select_time">Select Time</string>
     <string name="status_pinned">Pinned</string>
     <string name="status_scheduled">Scheduled</string>
     <string name="status_normal">Sent</string>
 
-    <!-- ===== 图片通知与通知栏内联编辑（2026-08-16） ===== -->
+    <!-- ===== 图片通知与通知栏内联编辑 ===== -->
     <string name="image_only_notification">[Image]</string>
     <string name="action_add_image">Add Image</string>
     <string name="action_remove_image">Remove Image</string>
     <string name="action_change_image">Change Image</string>
     <string name="edit_reply_label">Edit content</string>
 
-    <!-- ===== 日志导出（2026-08-16 15:39 | 图片通知闪退修复与日志导出） ===== -->
+    <!-- ===== 日志导出 ===== -->
     <string name="settings_log_section">Logs</string>
     <string name="settings_export_log">Export Logs</string>
     <string name="settings_export_log_desc">Export app logs filtered by level to a file</string>
@@ -143,12 +141,11 @@
     <string name="toast_notification_sent">Notification sent</string>
     <string name="toast_notification_scheduled">Notification scheduled</string>
     <string name="toast_notification_updated">Notification updated</string>
-    <!-- 新增（2026-08-16 18:02 | RemoteInput 可变性修复）：通知发布失败提示（M2） -->
     <string name="toast_notification_post_failed">Failed to post notification</string>
     <string name="toast_log_exported">Logs exported</string>
     <string name="toast_log_export_failed">Failed to export logs</string>
 
-    <!-- ===== About &amp; Feedback (2026-08-18 23:21) ===== -->
+    <!-- ===== About &amp; Feedback ===== -->
     <string name="about_title">About &amp; Feedback</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_send_feedback">Send Feedback</string>

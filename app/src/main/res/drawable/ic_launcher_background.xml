@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 启动器图标背景层：品牌绿对角渐变 -->
 <!-- 锚点色取自 Compose 主题 primary(#1B6B4A)，左上亮右下深营造立体感 -->
-<!-- 新增（2026-08-18 20:02 | 图片清晰度图标与转场动画修复）： -->
-<!-- 原启动器图标直接复用 24dp 白色通知剪影被启动器拉伸，无背景层与安全区 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"

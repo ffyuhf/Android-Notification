@@ -78,22 +78,10 @@ import java.util.Locale
  * 功能：
  * 1. 通知操作按钮开关（复制、编辑、取消固定）
  * 2. 多行显示 / 防删除保护 / 重发响铃开关
- * 3. 深色模式 / 语言选择（即时生效）
- * 4. 权限管理（通知权限 / 精确闹钟权限）
- * 5. 日志分级别导出
- * 6. 关于与反馈入口（独立二级页面，新增 2026-08-18 23:21）
- *
- * MD3 重绘（2026-08-18 15:59 | 界面MD3全面重绘）：
- * - P7 深色模式/语言 RadioButton 长列表改为 SingleChoiceSegmentedButtonRow
- *   分段按钮（MD3 单选惯例，压缩纵向占用）
- * - P8 分组重排：MD3 设置页惯例（分组标题 primary 色通栏 + ListItem 通栏 +
- *   组间分隔线），开关项增加语义图标锚点；顶栏配色与三页统一
- *
- * 逻辑保持（未变更）：B4 语言切换经 AppCompatDelegate 即时生效；
- * U1 精确闹钟权限手动入口；U2 通知权限状态展示；权限返回自动刷新；
- * 日志导出（级别对话框 → SAF → Toast）。
- *
- * 创建日期：2026-05-14 | 作者：Cline
+ * 3. 深色模式 / 语言选择（SingleChoiceSegmentedButtonRow 分段按钮，即时生效）
+ * 4. 权限管理（通知权限状态展示 / 精确闹钟权限手动入口，返回自动刷新）
+ * 5. 日志分级别导出（级别对话框 → SAF → Toast）
+ * 6. 关于与反馈入口（独立二级页面）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,7 +98,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
     val darkMode by viewModel.darkMode.collectAsState()
     val language by viewModel.language.collectAsState()
 
-    // 权限状态（从系统设置页返回后刷新，U2）
+    // 权限状态（从系统设置页返回后刷新）
     var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var exactAlarmGranted by remember { mutableStateOf(hasExactAlarmPermission(context)) }
     LifecycleResumeEffect(Unit) {
@@ -148,7 +136,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                // MD3 设置页惯例：ListItem 通栏无水平 padding，滚动防内容超屏不可达（F1）
+                // ListItem 通栏无水平 padding；滚动防内容超屏不可达
                 .verticalScroll(rememberScrollState())
         ) {
             // ===== 通知操作设置 =====
@@ -156,8 +144,8 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
 
             SettingsSwitchItem(
                 title = stringResource(R.string.settings_show_copy_button),
-                // 整改（2026-08-18 16:13 | CI 编译失败）：ContentCopy 无方向性，
-                // 官方未提供 AutoMirrored 版本（区别于 Send），改用标准 Filled 图标
+                // ContentCopy 无方向性，官方未提供 AutoMirrored 版本（区别于 Send），
+                // 使用标准 Filled 图标
                 icon = Icons.Filled.ContentCopy,
                 checked = showCopyButton,
                 onCheckedChange = { viewModel.setShowCopyButton(it) }
@@ -205,7 +193,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
             // ===== 外观设置 =====
             SettingsSectionTitle(text = stringResource(R.string.settings_appearance))
 
-            // 深色模式三选一（MD3 重绘 P7：分段按钮）
+            // 深色模式三选一（分段按钮）
             SettingsChoiceGroup(
                 title = stringResource(R.string.settings_dark_mode),
                 icon = Icons.Default.DarkMode,
@@ -218,7 +206,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
                 onSelected = { viewModel.setDarkMode(it) }
             )
 
-            // 语言三选一（切换即时生效，B4）
+            // 语言三选一（切换即时生效）
             SettingsChoiceGroup(
                 title = stringResource(R.string.settings_language),
                 icon = Icons.Default.Language,
@@ -236,7 +224,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
 
             SettingsSectionDivider()
 
-            // ===== 权限管理（U1/U2）=====
+            // ===== 权限管理 =====
             SettingsSectionTitle(text = stringResource(R.string.settings_permissions))
 
             // 通知权限条目
@@ -254,7 +242,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
                 }
             )
 
-            // 精确闹钟权限条目：仅 Android 12+ 且未授权时显示（U1）
+            // 精确闹钟权限条目：仅 Android 12+ 且未授权时显示
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmGranted) {
                 SettingsPermissionItem(
                     title = stringResource(R.string.settings_exact_alarm_permission),
@@ -293,8 +281,7 @@ fun SettingsScreen(viewModel: NotifyViewModel, onOpenAbout: () -> Unit) {
                 }
             )
 
-            // ===== 关于与反馈入口（新增 2026-08-18 23:21 | 历史块边缘与
-            // 关于反馈页）：点击进入独立关于页（MainActivity selectedItem = 3，
+            // ===== 关于与反馈入口：点击进入独立关于页（MainActivity selectedItem = 3，
             // 底栏收起，转场右滑前进）=====
             SettingsSectionDivider()
 
@@ -373,7 +360,7 @@ private fun defaultLogFileName(): String {
 }
 
 /**
- * 应用语言切换（B4）
+ * 应用语言切换
  *
  * 经 AppCompatDelegate per-app locale 机制即时生效并自动持久化：
  * API 33+ 由系统存储，以下版本由 appcompat 兼容存储。
@@ -390,7 +377,7 @@ private fun applyAppLanguage(language: String) {
 }
 
 /**
- * 检查通知权限状态（U2）
+ * 检查通知权限状态
  *
  * @param context 上下文
  * @return true 已授权（Android 13 以下视为已授权）
@@ -403,7 +390,7 @@ private fun hasNotificationPermission(context: Context): Boolean {
 }
 
 /**
- * 检查精确闹针权限状态（U1）
+ * 检查精确闹针权限状态
  *
  * @param context 上下文
  * @return true 可调度精确闹钟（Android 12 以下视为已授权）
@@ -414,7 +401,7 @@ private fun hasExactAlarmPermission(context: Context): Boolean {
 }
 
 /**
- * 设置分组标题（MD3 重绘 P8：primary 色标题通栏分组惯例）
+ * 设置分组标题（primary 色标题通栏分组惯例）
  *
  * @param text 分组标题文案
  */
@@ -429,7 +416,7 @@ private fun SettingsSectionTitle(text: String) {
 }
 
 /**
- * 设置分组间分隔线（MD3 重绘 P8：组间留白 + 细分隔）
+ * 设置分组间分隔线（组间留白 + 细分隔）
  */
 @Composable
 private fun SettingsSectionDivider() {
@@ -441,7 +428,7 @@ private fun SettingsSectionDivider() {
 }
 
 /**
- * 设置开关项（MD3 重绘 P8：增加语义图标锚点）
+ * 设置开关项（含语义图标锚点）
  *
  * @param title 开关标题
  * @param subtitle 可选副标题（用途说明）
@@ -474,7 +461,7 @@ private fun SettingsSwitchItem(
 }
 
 /**
- * 设置单选分组（MD3 重绘 P7：RadioButton 列表改分段按钮）
+ * 设置单选分组（分段按钮）
  *
  * @param title 分组标题
  * @param icon 语义图标
@@ -510,7 +497,7 @@ private fun SettingsChoiceGroup(
         )
     }
 
-    // 单选分段按钮（MD3）：中文标签单行显示
+    // 单选分段按钮：中文标签单行显示
     SingleChoiceSegmentedButtonRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -534,7 +521,7 @@ private fun SettingsChoiceGroup(
 }
 
 /**
- * 权限条目（U1/U2，MD3 重绘 P8：增加语义图标）
+ * 权限条目（含语义图标）
  *
  * @param title 权限名称
  * @param subtitle 权限用途说明

@@ -14,9 +14,9 @@ import kotlinx.coroutines.flow.map
 /**
  * DataStore 实例（文件顶层单例）
  *
- * 修复（2026-08-16 10:40 | B3）：preferencesDataStore 委托必须声明在文件顶层。
- * 原实现声明在类体内，每次实例化 SettingsDataStore 都会创建新的委托对象，
- * 多实例并存时 DataStore 抛出 "multiple DataStores active for the same file" 异常。
+ * preferencesDataStore 委托必须声明在文件顶层：声明在类体内时每次实例化
+ * 都会创建新的委托对象，多实例并存将抛出 "multiple DataStores active
+ * for the same file" 异常。
  */
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -24,8 +24,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
  * 通知设置快照
  *
  * 单次读取 DataStore 的全部通知相关设置项。
- * 批量发送/恢复通知时复用同一份快照，避免每条通知重复读取 5 次 DataStore。
- * 优化（2026-08-16 10:40 | P2）
+ * 批量发送/恢复通知时复用同一份快照，避免每条通知重复读取多次 DataStore。
  *
  * @param showCopyButton 是否显示复制按钮
  * @param showEditButton 是否显示编辑按钮
@@ -48,9 +47,6 @@ data class NotificationSettingsSnapshot(
  *
  * 使用 DataStore Preferences 持久化存储用户偏好设置。
  * 所有设置项通过 Flow 暴露，支持响应式更新。
- *
- * 创建日期：2026-05-14 | 作者：Cline
- * 优化（2026-08-16）：B3 委托顶层单例化 + P2 新增设置快照单次读取
  */
 class SettingsDataStore(private val context: Context) {
 
@@ -71,10 +67,10 @@ class SettingsDataStore(private val context: Context) {
     /** 防删除保护开关 */
     private val keyAntiDeleteProtection = booleanPreferencesKey("anti_delete_protection")
 
-    /** 历史重发响铃提醒开关（B10 新增） */
+    /** 历史重发响铃提醒开关 */
     private val keyResendSoundEnabled = booleanPreferencesKey("resend_sound_enabled")
 
-    /** 历史记录布局模式（H1 新增）："single"单列 / "two_column"两列 */
+    /** 历史记录布局模式："single"单列 / "two_column"两列 */
     private val keyHistoryLayoutMode = stringPreferencesKey("history_layout_mode")
 
     /** 深色模式：system/light/dark */
@@ -103,7 +99,7 @@ class SettingsDataStore(private val context: Context) {
     /** 历史重发是否响铃提醒，默认true */
     val resendSoundEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[keyResendSoundEnabled] ?: true }
 
-    /** 历史记录布局模式，默认"single"（H1 新增） */
+    /** 历史记录布局模式，默认"single" */
     val historyLayoutMode: Flow<String> = context.settingsDataStore.data.map { it[keyHistoryLayoutMode] ?: "single" }
 
     /** 深色模式设置，默认跟随系统 */
@@ -115,11 +111,11 @@ class SettingsDataStore(private val context: Context) {
     /**
      * 获取通知设置快照（单次 DataStore 读取）
      *
-     * 优化（2026-08-16 | P2）：批量发送通知时每条通知读取 5 个 Flow
-     * 造成 N×5 次 DataStore IO；快照方式将整批恢复的读取次数降为 1 次。
-     *
-     * @return 全部通知相关设置的快照
-     */
+      * 批量发送通知时若逐条读取 Flow 会造成 N×5 次 DataStore IO，
+      * 快照方式将整批恢复的读取次数降为 1 次。
+      *
+      * @return 全部通知相关设置的快照
+      */
     suspend fun getSnapshot(): NotificationSettingsSnapshot {
         val prefs = context.settingsDataStore.data.first()
         return NotificationSettingsSnapshot(
@@ -183,7 +179,7 @@ class SettingsDataStore(private val context: Context) {
     }
 
     /**
-     * 设置历史记录布局模式（H1 新增）
+     * 设置历史记录布局模式
      * @param value "single"单列, "two_column"两列
      */
     suspend fun setHistoryLayoutMode(value: String) {

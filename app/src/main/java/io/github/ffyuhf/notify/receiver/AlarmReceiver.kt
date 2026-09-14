@@ -18,13 +18,6 @@ import kotlinx.coroutines.launch
  * 1. 从数据库读取通知记录
  * 2. 发送通知到通知栏
  * 3. 如果是重复通知，以上次理论触发时间为基准计算下次触发并重新调度
- *
- * 修复（2026-08-16）：
- * - B6 重复通知漂移：原以 System.currentTimeMillis() 为基准计算下次触发，
- *   每周期累积偏差；现以 entity.scheduledAt 为基准并回写，保持周期稳定
- * - B7 使用 goAsync() 延长 Receiver 生命周期，确保异步操作完成
- *
- * 创建日期：2026-05-14 | 作者：Cline
  */
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -32,23 +25,21 @@ class AlarmReceiver : BroadcastReceiver() {
         val dbId = intent.getIntExtra(EXTRA_DB_ID, -1)
         if (dbId == -1) return
 
-        // goAsync 延长 Receiver 生命周期，确保数据库与通知操作在进程被回收前完成（B7）
+        // goAsync 延长 Receiver 生命周期，确保数据库与通知操作在进程被回收前完成
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val repository = NotificationRepository.getInstance(context)
                 val entity = repository.getById(dbId) ?: return@launch
 
-                // 发送通知
                 val settings = SettingsDataStore(context)
                 NotificationHelper.sendNotification(context, entity, settings.getSnapshot())
 
-                // 标记为已激活，纳入防删除三层保护（B9 修复）：
+                // 触发后才将记录置为 isActive=true 纳入防删除三层保护：
                 // 定时记录创建时为 isActive=false，触发前被巡检/恢复链路天然排除，
-                // 触发后才置为 true，杜绝"未到期定时通知被巡检误发"（设定19分18分提前出现）
+                // 杜绝"未到期定时通知被巡检误发"
                 repository.activateById(entity.id)
 
-                // 处理重复通知：以上次理论触发时间为基准（B6）
                 if (entity.repeatType != null) {
                     scheduleNextRepeating(context, repository, entity)
                 }
@@ -77,13 +68,13 @@ class AlarmReceiver : BroadcastReceiver() {
         val repeatType = entity.repeatType ?: return
         val baseTime = entity.scheduledAt ?: System.currentTimeMillis()
 
-        // 基准落后时按周期顺延至未来，避免补发风暴
+        // 基准落后于当前时间（如设备长期关机）时按周期顺延至未来，避免补发风暴
         var nextTime = AlarmScheduler.calculateNextTriggerTime(repeatType, baseTime)
         while (nextTime <= System.currentTimeMillis()) {
             nextTime = AlarmScheduler.calculateNextTriggerTime(repeatType, nextTime)
         }
 
-        // 回写下次触发时间作为后续计算基准，消除累积漂移（B6）
+        // 回写下次触发时间作为后续计算基准，消除累积漂移
         repository.updateScheduledAt(entity.id, nextTime)
         AlarmScheduler.scheduleRepeating(context, entity, nextTime)
     }

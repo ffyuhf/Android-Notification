@@ -44,9 +44,8 @@ private val LightColorScheme = lightColorScheme(
     onBackground = Color(0xFF191C1A),
     surface = Color(0xFFFBFDF8),
     onSurface = Color(0xFF191C1A),
-    // MD3 重绘（2026-08-18 15:52 | 界面MD3全面重绘）：补充 surfaceContainer 系列色槽，
-    // 未指定时回落默认中性色与自定义绿色 surface 不协调；以下取值按本项目绿色调
-    // surface(0xFFFBFDF8) 为锚点派生，保证卡片/顶栏/底部栏层级色与主题一致
+    // surfaceContainer 系列色槽按浅色 surface(0xFFFBFDF8) 锚点派生：
+    // 未指定时回落默认中性色与自定义绿色 surface 不协调
     surfaceDim = Color(0xFFDBDED7),
     surfaceBright = Color(0xFFFBFDF8),
     surfaceContainerLowest = Color(0xFFFFFFFF),
@@ -87,8 +86,7 @@ private val DarkColorScheme = darkColorScheme(
     onBackground = Color(0xFFE1E3DE),
     surface = Color(0xFF191C1A),
     onSurface = Color(0xFFE1E3DE),
-    // MD3 重绘（2026-08-18 15:52 | 界面MD3全面重绘）：深色侧同套补充，
-    // 以深色 surface(0xFF191C1A) 为锚点派生容器层级色
+    // 深色侧同套色槽，以深色 surface(0xFF191C1A) 锚点派生容器层级色
     surfaceDim = Color(0xFF111411),
     surfaceBright = Color(0xFF373A36),
     surfaceContainerLowest = Color(0xFF131614),
@@ -106,7 +104,7 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 /**
- * MD3 形状基线（2026-08-18 15:52 | 界面MD3全面重绘）
+ * MD3 形状基线
  *
  * 显式固化 Material 3 标准圆角阶梯，全应用卡片/输入框/弹层统一引用，
  * 后续如需调整圆角只改此处即可全局生效。
@@ -178,7 +176,6 @@ fun NotifyAppTheme(
 
     MaterialTheme(
         colorScheme = finalColorScheme,
-        // MD3 重绘（2026-08-18 15:52）：统一形状基线，全局圆角一致
         shapes = AppShapes,
         content = content
     )

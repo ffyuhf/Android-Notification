@@ -9,9 +9,6 @@ import androidx.room.PrimaryKey
  *
  * 存储每条通知的完整信息，包括内容、时间、重复配置、状态等。
  * 对应数据库表：notifications
- *
- * 创建日期：2026-05-14
- * 作者：Cline
  */
 @Entity(
     tableName = "notifications",
@@ -74,8 +71,6 @@ data class NotificationEntity(
      * （filesDir/notification_images/）的绝对路径，用于通知栏 BigPictureStyle
      * 大图展示与历史记录缩略图。null 表示该通知无图片。
      * 纯图通知时 content 存空串 ""，由发送条件「正文与图片至少一项」约束。
-     *
-     * 新增（2026-08-16 | 图片通知）：数据库 version 1→2 经 ALTER TABLE 增加本列
      */
     val imagePath: String? = null
 )

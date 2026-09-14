@@ -16,15 +16,6 @@ import java.io.File
  *   重新发送通知时必须读取私有路径，故必须落盘）
  * - deleteImage：删除记录时同步清理图片文件，防止私有目录膨胀
  * - decodeSampledBitmap：两阶段下采样解码，限制目标边长控制内存占用（防 OOM）
- *
- * 新增（2026-08-16 | 图片通知）
- * 修正（2026-08-16 15:39 | 图片通知闪退修复）：
- * - 采样率算法 off-by-one：原条件先除以 (sampleSize*2) 再比较，导致采样率始终
- *   比正确值小一档（4032×3024 照片 @2048 目标 sampleSize 停留在 1，全尺寸解码约
- *   46MB，为设计内存 4 倍），发送大图与启动全量恢复两路径连锁 OOM 闪退；
- *   现改为以当前档尺寸比较，保证解码边长 ≤ 目标值
- * - 追加 OutOfMemoryError 捕获（Error 不被 catch(Exception) 捕获，原防线失效）
- * - 全方法接入 AppLogger 埋点，供设置页分级别导出
  */
 object ImageStorageHelper {
 
@@ -130,19 +121,16 @@ object ImageStorageHelper {
         decodeSampledBitmapToFit(path, maxDimension, maxDimension)
 
     /**
-     * 两步精确解码：等比 fit 到目标显示框（视觉原图方案核心）
+     * 两步精确解码：等比 fit 到目标显示框
      *
-     * 实现思路（2026-08-18 19:56 | 图片清晰度修复）：
      * - 阶段一（读边界）：仅解析图片宽高，按 min(框宽/图宽, 框高/图高) 计算 fit 缩放比；
-     *   缩放比钳制 ≤1——原图小于显示区时保持原尺寸解码（视觉原图不放大，放大反而发糊）
+     *   缩放比钳制 ≤1——原图小于显示区时保持原尺寸解码（放大反而发糊）
      * - 阶段二（粗采样）：inSampleSize 取"再翻倍仍 ≥ 精确目标"的最大 2 的幂，
      *   保证粗采样结果 ≥ 精确目标（只向缩小方向收敛），控制解码内存防 OOM
      * - 阶段三（精缩放）：Bitmap.createScaledBitmap 双线性插值缩放到精确目标，
      *   消除 inSampleSize 仅支持 2 的幂导致的最多 50% 分辨率损失
-     *   （此前 4032px 照片 @400 目标实际只解出 252px，为"图压到不能看"根因）
      *
-     * OOM 防线保持：粗采样先行 + OutOfMemoryError 捕获返回 null，不重蹈全尺寸解码闪退。
-     *
+     * OOM 防线：粗采样先行 + OutOfMemoryError 捕获返回 null。
      * 注意：本方法含磁盘 IO 与大块内存分配，调用方必须处于后台线程
      * （通知链路由 sendNotification 的 withContext(IO) 保证，UI 层经
      * rememberSampledBitmap 的 Dispatchers.IO 保证）。
