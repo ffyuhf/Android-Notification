@@ -25,7 +25,7 @@ local.properties
 # ===== 日志 =====
 *.log
 
-# ===== 签名文件（含补强 2026-09-13 | 批次一 E1：密钥/私钥/证书全防线）=====
+# ===== 签名文件 =====
 *.jks
 *.keystore
 release.keystore
@@ -34,15 +34,15 @@ key.properties
 *.pk8
 *.pem
 
-# ===== IDE（补强 2026-09-13 | 批次一 E2：覆盖 VSCode）=====
+# ===== IDE =====
 .vscode/
 
-# ===== Kotlin/NDK 构建残留（补强 2026-09-13 | 批次一 E3）=====
+# ===== Kotlin/NDK 构建残留 =====
 .kotlin/
 .cxx/
 output-metadata.json
 
-# ===== fastlane 输出（补强 2026-09-13 | 批次一 E4）=====
+# ===== fastlane 输出 =====
 fastlane/report.xml
 
 # ===== 系统文件 =====
