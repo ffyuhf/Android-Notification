@@ -8,12 +8,9 @@ targetSdk = "36"
 compileSdk = "36"
 
 # Kotlin & Android
-# 全线升级至最新稳定线（2026-09-13 | 批次一 B1-B3，版本经 Google Maven/Maven Central 实查：
-#   AGP 9.4.0 明确支持 compileSdk 36+；用户确认 Q1选B+AGP9.4.0）
-# Kotlin/KSP 升级至 2.3 线（2026-09-14 | Kotlin23线升级修复，用户裁决 Q1=B，Maven 实查定稿）：
-#   旧 KSP 2.2.21-2.0.5（曾用于 2026-09-13~09-14，<kotlin>-<ksp> 旧版本号制末代）无条件拒绝
-#   AGP 9 内置 Kotlin（CI 致命诊断）；KSP 2.3.0 起版本号独立制并支持内置 Kotlin
-#   （门槛 AGP≥9.0.0-alpha14，本项目 9.4.0 满足），且官方声明"不再与 Kotlin 编译器版本绑定"
+# AGP 9.4.0 明确支持 compileSdk 36+；KSP 2.3.0 起版本号独立制并支持 AGP 9 内置
+# Kotlin（门槛 AGP≥9.0.0-alpha14），官方声明"不再与 Kotlin 编译器版本绑定"——
+# 旧 <kotlin>-<ksp> 版本号制的 KSP 会无条件拒绝内置 Kotlin
 agp = "9.4.0"
 kotlin = "2.3.21"
 ksp = "2.3.12"
@@ -29,11 +26,9 @@ appcompat = "1.7.0"
 lifecycle = "2.8.7"
 splashScreen = "1.0.1"
 
-# Room 升级至 2.8 线（2026-09-14 | Room28线升级修复，用户裁决 Q1=A，Google Maven 实查定稿）：
-#   Room 2.6.1（2023 线，KSP1/Kotlin 2.0 早期时代）编译器在 Kotlin 2.3.21 + KSP 2.3.12 栈
-#   崩溃 unexpected jvm signature V（2026-09-14 CI kspDebugKotlin 堆栈实证，崩于 Room
-#   XProcessing QueryMethodProcessor 解析 DAO 类型）；2.7 起为 KMP 重写线（KSP2 支持
-#   起点），2.8.5 为最新稳定适配线；runtime/ktx/compiler 三条经 version.ref 自动跟随
+# Room：2.6.x 编译器在 Kotlin 2.3 + KSP 2.3 栈崩溃 unexpected jvm signature V；
+# 2.7 起为 KMP 重写线（KSP2 支持起点），2.8.5 为最新稳定适配线；
+# runtime/ktx/compiler 三条经 version.ref 自动跟随
 room = "2.8.5"
 
 # DataStore
@@ -86,9 +81,8 @@ junit-ext = { group = "androidx.test.ext", name = "junit", version.ref = "junitE
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 
 [plugins]
-# kotlin-android 条目移除（2026-09-13 23:57 | AGP9内置Kotlin迁移，用户裁决 Q1=C）：
-# AGP 9.0 起 Kotlin 支持内置于 AGP，该插件三处声明全清；kotlin 版本条目保留——
-# kotlin-compose 仍引用（version.ref = "kotlin"）
+# 不声明 kotlin-android 条目：AGP 9.0 起 Kotlin 支持内置于 AGP；
+# kotlin 版本条目保留——kotlin-compose 仍引用（version.ref = "kotlin"）
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
